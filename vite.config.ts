@@ -9,14 +9,14 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
-  preview: {
-    // allow the Render preview host so Vite's preview doesn't block it
-    allowedHosts: ["esprimrobots2026.onrender.com"],
-  },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  preview: {
+    // allow the Render preview host so Vite's preview doesn't block it
+    allowedHosts: ["esprimrobots2026.onrender.com"]
+  }
 }));
