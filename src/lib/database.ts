@@ -69,7 +69,7 @@ export interface ClubDatabase {
 
 const defaultDatabase: ClubDatabase = {
   settings: {
-    videoFilename: 'hero-video.mp4',
+    videoFilename: '16_10.mp4',
     showApplyBtn: false,
     showInterviewBtn: false,
     showResultBtn: false,

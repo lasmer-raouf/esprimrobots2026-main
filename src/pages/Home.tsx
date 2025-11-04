@@ -35,7 +35,17 @@ export default function Home() {
       .eq('key', 'video_background_type')
       .single();
 
-    if (urlData?.value) setVideoUrl(urlData.value);
+    if (urlData?.value) {
+      setVideoUrl(urlData.value);
+    } else {
+      // No custom video set in the admin settings — fall back to the local default
+      const defaultFile = clubDB.settings.videoFilename || '16_10.mp4';
+      // Ensure the file is served from the public root
+      setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
+      // If admin hasn't set a type, default to a local video
+      if (!typeData?.value) setVideoType('local');
+    }
+
     if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
   };
 
