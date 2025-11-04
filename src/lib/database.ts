@@ -95,7 +95,7 @@ const defaultDatabase: ClubDatabase = {
       status: 'In Progress',
     },
   ],
-  competitionRobots: [
+  competitionRobots: [/*
     {
       id: 1,
       name: 'AlphaBot',
@@ -116,7 +116,7 @@ const defaultDatabase: ClubDatabase = {
       description: 'All-terrain exploration robot for rescue missions.',
       slots: 4,
       signups: [],
-    },
+    },*/
   ],
   announcements: [
     {
