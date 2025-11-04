@@ -23,6 +23,13 @@ export default function Home() {
   }, []);
 
   const loadVideoSettings = async () => {
+    // If the local DB is configured to force a local background, use it and ignore remote/admin settings.
+    if (clubDB.settings.forceLocalBackground) {
+      const defaultFile = clubDB.settings.videoFilename || 'Robotics_Club_Logo_Video_Generation.mp4';
+      setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
+      setVideoType('local');
+      return;
+    }
     const { data: urlData } = await supabase
       .from('site_settings')
       .select('value')
@@ -37,16 +44,16 @@ export default function Home() {
 
     if (urlData?.value) {
       setVideoUrl(urlData.value);
+      // If admin provided a type, use it; otherwise assume local
+      if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
+      else setVideoType('local');
     } else {
       // No custom video set in the admin settings — fall back to the local default
       const defaultFile = clubDB.settings.videoFilename || 'Robotics_Club_Logo_Video_Generation.mp4';
       // Ensure the file is served from the public root
       setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
-      // If admin hasn't set a type, default to a local video
-      if (!typeData?.value) setVideoType('local');
+      setVideoType('local');
     }
-
-    if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
   };
 
   const loadAnnouncements = async () => {

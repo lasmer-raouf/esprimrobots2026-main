@@ -56,6 +56,7 @@ export interface Announcement {
 export interface ClubDatabase {
   settings: {
     videoFilename: string;
+    forceLocalBackground?: boolean;
     showApplyBtn: boolean;
     showInterviewBtn: boolean;
     showResultBtn: boolean;
@@ -70,6 +71,8 @@ export interface ClubDatabase {
 const defaultDatabase: ClubDatabase = {
   settings: {
     videoFilename: 'Robotics_Club_Logo_Video_Generation.mp4',
+    // When true, always use the local videoFilename as the background and ignore remote/admin settings.
+    forceLocalBackground: true,
     showApplyBtn: false,
     showInterviewBtn: false,
     showResultBtn: false,
