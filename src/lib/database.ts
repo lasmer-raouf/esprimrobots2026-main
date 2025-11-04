@@ -75,7 +75,7 @@ const defaultDatabase: ClubDatabase = {
     showResultBtn: false,
   },
   pendingMembers: [],
-  projects: [
+  projects: [/*
     {
       id: 1,
       title: 'Autonomous Line Following Robot',
@@ -93,7 +93,7 @@ const defaultDatabase: ClubDatabase = {
       title: 'Maze Solving Robot',
       description: 'Autonomous robot that can navigate and solve complex mazes using ultrasonic sensors.',
       status: 'In Progress',
-    },
+    },*/
   ],
   competitionRobots: [/*
     {
