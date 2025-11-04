@@ -69,7 +69,7 @@ export interface ClubDatabase {
 
 const defaultDatabase: ClubDatabase = {
   settings: {
-    videoFilename: '16_10.mp4',
+    videoFilename: 'Robotics_Club_Logo_Video_Generation.mp4',
     showApplyBtn: false,
     showInterviewBtn: false,
     showResultBtn: false,

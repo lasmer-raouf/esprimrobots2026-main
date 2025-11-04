@@ -39,7 +39,7 @@ export default function Home() {
       setVideoUrl(urlData.value);
     } else {
       // No custom video set in the admin settings — fall back to the local default
-      const defaultFile = clubDB.settings.videoFilename || '16_10.mp4';
+      const defaultFile = clubDB.settings.videoFilename || 'Robotics_Club_Logo_Video_Generation.mp4';
       // Ensure the file is served from the public root
       setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
       // If admin hasn't set a type, default to a local video
