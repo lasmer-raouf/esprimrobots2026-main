@@ -19,9 +19,11 @@ export function AdminSettings() {
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoType, setVideoType] = useState<'local' | 'youtube' | 'none'>('none');
+  const [welcomePopupText, setWelcomePopupText] = useState('');
 
   useEffect(() => {
     loadVideoSettings();
+    loadWelcomePopupText();
   }, []);
 
   const loadVideoSettings = async () => {
@@ -39,6 +41,16 @@ export function AdminSettings() {
 
     if (urlData?.value) setVideoUrl(urlData.value);
     if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
+  };
+
+  const loadWelcomePopupText = async () => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'welcome_popup_text')
+      .maybeSingle();
+
+    if (data?.value) setWelcomePopupText(data.value);
   };
 
   const handleSaveSettings = () => {
@@ -106,6 +118,25 @@ export function AdminSettings() {
       toast({
         title: 'Error',
         description: 'Failed to save video settings.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSaveWelcomePopup = async () => {
+    try {
+      await supabase
+        .from('site_settings')
+        .upsert({ key: 'welcome_popup_text', value: welcomePopupText }, { onConflict: 'key' });
+
+      toast({
+        title: 'Welcome Popup Saved',
+        description: 'Welcome popup message has been updated.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save welcome popup.',
         variant: 'destructive',
       });
     }
@@ -212,6 +243,32 @@ export function AdminSettings() {
               Post Announcement
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome Popup</CardTitle>
+          <CardDescription>Set a message that appears when users visit the site for the first time</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="welcome-popup">Welcome Message</Label>
+            <Textarea
+              id="welcome-popup"
+              value={welcomePopupText}
+              onChange={(e) => setWelcomePopupText(e.target.value)}
+              placeholder="Enter your welcome message here..."
+              rows={5}
+            />
+            <p className="text-xs text-muted-foreground">
+              This message will be shown in a popup dialog when users visit your site for the first time. Leave empty to disable the popup.
+            </p>
+          </div>
+
+          <Button onClick={handleSaveWelcomePopup} className="w-full">
+            Save Welcome Popup
+          </Button>
         </CardContent>
       </Card>
 

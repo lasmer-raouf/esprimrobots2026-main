@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, Home, Users, FolderKanban, Trophy, MessageSquare, Settings, Shield, Info, UserCircle } from 'lucide-react';
+import { LogOut, Home, Users, FolderKanban, Trophy, MessageSquare, Settings, Shield, Info, UserCircle, Calendar, UserPlus, UsersRound, Newspaper } from 'lucide-react';
 import { AdminOverview } from '@/components/admin/AdminOverview';
 import { AdminMembers } from '@/components/admin/AdminMembers';
 import { AdminProjects } from '@/components/admin/AdminProjects';
@@ -11,6 +11,10 @@ import { AdminChat } from '@/components/admin/AdminChat';
 import { AdminSettings } from '@/components/admin/AdminSettings';
 import { AdminRoles } from '@/components/admin/AdminRoles';
 import { AdminAbout } from '@/components/admin/AdminAbout';
+import { AdminEvents } from '@/components/admin/AdminEvents';
+import { AdminApplications } from '@/components/admin/AdminApplications';
+import { AdminGroups } from '@/components/admin/AdminGroups';
+import { AdminNews } from '@/components/admin/AdminNews';
 
 export default function AdminDashboard() {
   const { user, isAdmin, signOut, loading } = useAuth();
@@ -104,6 +108,38 @@ export default function AdminDashboard() {
             <Info className="mr-2 h-4 w-4" />
             About Us Page
           </Button>
+          <Button
+            variant={currentPage === 'events' ? 'default' : 'ghost'}
+            className="w-full justify-start"
+            onClick={() => setCurrentPage('events')}
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            Events
+          </Button>
+          <Button
+            variant={currentPage === 'applications' ? 'default' : 'ghost'}
+            className="w-full justify-start"
+            onClick={() => setCurrentPage('applications')}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Applications
+          </Button>
+          <Button
+            variant={currentPage === 'groups' ? 'default' : 'ghost'}
+            className="w-full justify-start"
+            onClick={() => setCurrentPage('groups')}
+          >
+            <UsersRound className="mr-2 h-4 w-4" />
+            Group Management
+          </Button>
+          <Button
+            variant={currentPage === 'news' ? 'default' : 'ghost'}
+            className="w-full justify-start"
+            onClick={() => setCurrentPage('news')}
+          >
+            <Newspaper className="mr-2 h-4 w-4" />
+            News
+          </Button>
         </nav>
 
         <div className="pt-6 border-t border-border space-y-2">
@@ -143,6 +179,10 @@ export default function AdminDashboard() {
         {currentPage === 'settings' && <AdminSettings />}
         {currentPage === 'roles' && <AdminRoles />}
         {currentPage === 'about' && <AdminAbout />}
+        {currentPage === 'events' && <AdminEvents />}
+        {currentPage === 'applications' && <AdminApplications />}
+        {currentPage === 'groups' && <AdminGroups />}
+        {currentPage === 'news' && <AdminNews />}
       </main>
     </div>
   );

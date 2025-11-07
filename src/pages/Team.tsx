@@ -1,8 +1,11 @@
 import { PublicHeader } from '@/components/PublicHeader';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { User, Linkedin, Instagram } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface TeamMember {
   id: string;
@@ -17,12 +20,20 @@ interface TeamMember {
 }
 
 export default function Team() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadTeamMembers();
-  }, []);
+    if (!authLoading) {
+      if (user) {
+        loadTeamMembers();
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [user, authLoading]);
 
   const loadTeamMembers = async () => {
     try {
@@ -69,12 +80,31 @@ export default function Team() {
   const executives = teamMembers.filter(m => m.role === 'executive');
   const members = teamMembers.filter(m => m.role !== 'founder' && m.role !== 'executive');
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen">
         <PublicHeader />
         <main className="container mx-auto px-4 py-16 text-center">
-          <p>Loading team members...</p>
+          <p>Loading...</p>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen">
+        <PublicHeader />
+        <main className="container mx-auto px-4 py-16 text-center">
+          <div className="max-w-md mx-auto space-y-6">
+            <h1 className="text-4xl font-bold mb-4">Our Team</h1>
+            <p className="text-lg text-muted-foreground mb-8">
+              Please log in to see our team members
+            </p>
+            <Button onClick={() => navigate('/login')} size="lg">
+              Log In
+            </Button>
+          </div>
         </main>
       </div>
     );

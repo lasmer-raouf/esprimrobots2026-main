@@ -13,6 +13,9 @@ import Apply from "./pages/Apply";
 import Login from "./pages/Login";
 import MemberDashboard from "./pages/MemberDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import Events from "./pages/Events";
+import GroupMembers from "./pages/GroupMembers";
+import News from "./pages/News";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +53,9 @@ const App = () => (
             <Route path="/competition" element={<Competition />} />
             <Route path="/apply" element={<Apply />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/groups" element={<GroupMembers />} />
+            <Route path="/news" element={<News />} />
             <Route
               path="/member"
               element={

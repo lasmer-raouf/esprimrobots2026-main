@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { clubDB } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { Trash2 } from 'lucide-react';
 import { AddMemberDialog } from './AddMemberDialog';
 import { AddAdminDialog } from './AddAdminDialog';
 import { ManageMemberDialog } from './ManageMemberDialog';
@@ -60,7 +61,7 @@ export function AdminMembers() {
     }
   };
 
-  const handleAcceptApplication = (id: number) => {
+  const handleAcceptApplication = async (id: number) => {
     const pending = clubDB.pendingMembers.find(m => m.id === id);
     if (!pending) return;
 
@@ -70,12 +71,93 @@ export function AdminMembers() {
     });
   };
 
-  const handleRejectApplication = (id: number) => {
+  const handleRejectApplication = async (id: number) => {
     clubDB.pendingMembers = clubDB.pendingMembers.filter(m => m.id !== id);
     toast({
       title: 'Application Rejected',
       description: 'The application has been removed.',
     });
+  };
+
+  const handleAcceptRealApplication = async (appId: string, userId: string) => {
+    // Assign member role
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .insert([{ user_id: userId, role: 'member' }]);
+
+    if (roleError) {
+      toast({
+        title: 'Error',
+        description: 'Failed to accept application',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Update application status
+    await supabase
+      .from('applications')
+      .update({ status: 'accepted' })
+      .eq('id', appId);
+
+    toast({
+      title: 'Success',
+      description: 'Application accepted! User is now a member.',
+    });
+    
+    loadMembers();
+  };
+
+  const handleRejectRealApplication = async (appId: string, userId: string) => {
+    // Delete the application
+    const { error: appError } = await supabase
+      .from('applications')
+      .delete()
+      .eq('id', appId);
+
+    if (appError) {
+      toast({
+        title: 'Error',
+        description: 'Failed to reject application',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Delete user roles if any
+    await supabase.from('user_roles').delete().eq('user_id', userId);
+    
+    // Delete from groups
+    await supabase.from('member_groups').delete().eq('user_id', userId);
+
+    // Delete the user account (admin API call needed)
+    // Note: This requires admin privileges, handled via edge function would be better
+    // For now, we just remove the application and roles
+
+    toast({
+      title: 'Success',
+      description: 'Application rejected and user removed.',
+    });
+    
+    loadMembers();
+  };
+
+  const handleDeleteMember = async (userId: string) => {
+    // Delete user roles
+    await supabase.from('user_roles').delete().eq('user_id', userId);
+    
+    // Delete from groups
+    await supabase.from('member_groups').delete().eq('user_id', userId);
+    
+    // Delete application if exists
+    await supabase.from('applications').delete().eq('user_id', userId);
+
+    toast({
+      title: 'Success',
+      description: 'Member removed successfully',
+    });
+    
+    loadMembers();
   };
 
   return (
@@ -118,7 +200,16 @@ export function AdminMembers() {
                           ))}
                         </div>
                       </div>
-                      <ManageMemberDialog memberId={member.id} memberName={member.name} />
+                      <div className="flex gap-2">
+                        <ManageMemberDialog memberId={member.id} memberName={member.name} />
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteMember(member.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">

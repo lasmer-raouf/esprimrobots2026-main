@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { clubDB } from '@/lib/database';
 import { PublicHeader } from '@/components/PublicHeader';
+import { WelcomePopup } from '@/components/WelcomePopup';
 import { VideoBackground } from '@/components/VideoBackground';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,13 +24,6 @@ export default function Home() {
   }, []);
 
   const loadVideoSettings = async () => {
-    // If the local DB is configured to force a local background, use it and ignore remote/admin settings.
-    if (clubDB.settings.forceLocalBackground) {
-      const defaultFile = clubDB.settings.videoFilename || 'Robotics_Club_Logo_Video_Generation.mp4';
-      setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
-      setVideoType('local');
-      return;
-    }
     const { data: urlData } = await supabase
       .from('site_settings')
       .select('value')
@@ -42,18 +36,8 @@ export default function Home() {
       .eq('key', 'video_background_type')
       .single();
 
-    if (urlData?.value) {
-      setVideoUrl(urlData.value);
-      // If admin provided a type, use it; otherwise assume local
-      if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
-      else setVideoType('local');
-    } else {
-      // No custom video set in the admin settings — fall back to the local default
-      const defaultFile = clubDB.settings.videoFilename || 'Robotics_Club_Logo_Video_Generation.mp4';
-      // Ensure the file is served from the public root
-      setVideoUrl(defaultFile.startsWith('/') ? defaultFile : `/${defaultFile}`);
-      setVideoType('local');
-    }
+    if (urlData?.value) setVideoUrl(urlData.value);
+    if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
   };
 
   const loadAnnouncements = async () => {
@@ -83,6 +67,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <PublicHeader />
+      <WelcomePopup />
       
       {announcements.length > 0 && (
         <div className="announcement-bar bg-primary/10 border-b border-primary/20 py-3 relative">

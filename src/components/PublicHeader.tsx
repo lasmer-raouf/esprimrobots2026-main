@@ -7,16 +7,9 @@ import { useState } from 'react';
 export function PublicHeader() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const latestAnnouncement = clubDB.announcements[clubDB.announcements.length - 1];
 
   return (
-    <>
-      {latestAnnouncement && (
-        <div className="bg-primary text-primary-foreground py-2 px-4 text-center text-sm font-medium">
-          {latestAnnouncement.content}
-        </div>
-      )}
-      <header className="border-b border-border bg-card sticky top-0 z-50">
+    <header className="border-b border-border bg-card sticky top-0 z-50">
         <nav className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <button 
@@ -64,6 +57,18 @@ export function PublicHeader() {
               >
                 Competition
               </button>
+              <button 
+                onClick={() => { navigate('/events'); setMobileMenuOpen(false); }}
+                className="hover:text-primary transition-colors"
+              >
+                Events
+              </button>
+              <button 
+                onClick={() => { navigate('/news'); setMobileMenuOpen(false); }}
+                className="hover:text-primary transition-colors"
+              >
+                News
+              </button>
             </div>
 
             <div className="hidden md:flex gap-3">
@@ -84,6 +89,5 @@ export function PublicHeader() {
           </div>
         </nav>
       </header>
-    </>
   );
 }

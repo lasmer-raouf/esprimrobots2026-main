@@ -8,6 +8,7 @@ import { MemberOverview } from '@/components/member/MemberOverview';
 import { MemberGroupsTasks } from '@/components/member/MemberGroupsTasks';
 import { MemberCompetition } from '@/components/member/MemberCompetition';
 import { MemberChat } from '@/components/member/MemberChat';
+import { ApplicationStatus } from '@/components/member/ApplicationStatus';
 
 export default function MemberDashboard() {
   const { user, profile, isApproved, isAdmin, signOut, loading } = useAuth();
@@ -136,6 +137,7 @@ export default function MemberDashboard() {
       </aside>
 
       <main className="flex-1 p-8">
+        <ApplicationStatus />
         {currentPage === 'overview' && <MemberOverview />}
         {currentPage === 'groups' && <MemberGroupsTasks />}
         {currentPage === 'competition' && <MemberCompetition />}
