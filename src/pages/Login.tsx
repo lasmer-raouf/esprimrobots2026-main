@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
   const { signIn, signUp, user, isAdmin, loading } = useAuth();
@@ -155,7 +155,15 @@ export default function Login() {
                     </div>
 
                     <div>
-                      <Label htmlFor="member-password">Password</Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="member-password">Password</Label>
+                        <Link 
+                          to="/reset-password" 
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Forgot Password?
+                        </Link>
+                      </div>
                       <Input
                         id="member-password"
                         type="password"
@@ -187,7 +195,15 @@ export default function Login() {
                     </div>
 
                     <div>
-                      <Label htmlFor="admin-password">Admin Password</Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="admin-password">Admin Password</Label>
+                        <Link 
+                          to="/reset-password" 
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Forgot Password?
+                        </Link>
+                      </div>
                       <Input
                         id="admin-password"
                         type="password"

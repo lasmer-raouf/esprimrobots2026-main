@@ -46,11 +46,35 @@ export default function Home() {
 
   useEffect(() => {
     const currentText = typingTexts[textIndex];
+    
+    // More realistic typing speed with variation
+    const getTypingSpeed = () => {
+      if (isDeleting) {
+        return 30 + Math.random() * 20; // Faster deletion: 30-50ms
+      }
+      
+      // Variable typing speed: 80-150ms per character
+      const baseSpeed = 80 + Math.random() * 70;
+      
+      // Slower for punctuation marks
+      if (['.', ',', '!', '?'].includes(currentText[typingText.length])) {
+        return baseSpeed * 2;
+      }
+      
+      // Slight pause after spaces (more natural)
+      if (currentText[typingText.length - 1] === ' ') {
+        return baseSpeed * 1.5;
+      }
+      
+      return baseSpeed;
+    };
+
     const timeout = setTimeout(() => {
       if (!isDeleting) {
         setTypingText(currentText.slice(0, typingText.length + 1));
         if (typingText === currentText) {
-          setTimeout(() => setIsDeleting(true), 2000);
+          // Longer, more natural pause at end: 2-3 seconds
+          setTimeout(() => setIsDeleting(true), 2000 + Math.random() * 1000);
         }
       } else {
         setTypingText(currentText.slice(0, typingText.length - 1));
@@ -59,7 +83,7 @@ export default function Home() {
           setTextIndex((textIndex + 1) % typingTexts.length);
         }
       }
-    }, isDeleting ? 50 : 100);
+    }, getTypingSpeed());
 
     return () => clearTimeout(timeout);
   }, [typingText, isDeleting, textIndex]);
@@ -94,7 +118,7 @@ export default function Home() {
           <div className="relative z-20 text-center px-4 animate-fade-in">
             <h1 className="text-5xl md:text-7xl font-bold mb-6">
               We are <span className="text-primary">{typingText}</span>
-              <span className="animate-pulse text-primary">|</span>
+              <span className="inline-block w-1 h-[1em] bg-primary ml-1 animate-[blink_1s_step-end_infinite]" />
             </h1>
             
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto">

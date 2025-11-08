@@ -83,6 +83,10 @@ export default {
         "glow": {
           "0%, 100%": { boxShadow: "0 0 20px hsl(var(--primary) / 0.5)" },
           "50%": { boxShadow: "0 0 40px hsl(var(--primary) / 0.8)" }
+        },
+        "blink": {
+          "0%, 49%": { opacity: "1" },
+          "50%, 100%": { opacity: "0" }
         }
       },
       animation: {
@@ -91,6 +95,7 @@ export default {
         "fade-in": "fade-in 0.5s ease-out",
         "slide-in": "slide-in 0.3s ease-out",
         "glow": "glow 2s ease-in-out infinite",
+        "blink": "blink 1s step-end infinite",
       },
     },
   },

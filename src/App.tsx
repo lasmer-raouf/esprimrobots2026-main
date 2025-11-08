@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { MobileWarning } from "@/components/MobileWarning";
+import { useIsMobile } from "@/hooks/use-mobile";
 import Home from "./pages/Home";
 import Team from "./pages/Team";
 import About from "./pages/About";
@@ -11,6 +13,7 @@ import Projects from "./pages/Projects";
 import Competition from "./pages/Competition";
 import Apply from "./pages/Apply";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import MemberDashboard from "./pages/MemberDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Events from "./pages/Events";
@@ -38,14 +41,21 @@ function ProtectedRoute({ children, requireAdmin }: { children: React.ReactNode;
   return <>{children}</>;
 }
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
+const App = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileWarning />;
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/team" element={<Team />} />
             <Route path="/about" element={<About />} />
@@ -53,6 +63,7 @@ const App = () => (
             <Route path="/competition" element={<Competition />} />
             <Route path="/apply" element={<Apply />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/events" element={<Events />} />
             <Route path="/groups" element={<GroupMembers />} />
             <Route path="/news" element={<News />} />
@@ -73,11 +84,12 @@ const App = () => (
               }
             />
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
