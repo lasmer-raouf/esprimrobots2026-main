@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { clubDB } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Trash2 } from 'lucide-react';
@@ -15,149 +14,197 @@ interface Member {
   id: string;
   name: string;
   email: string;
-  major?: string;
+  major?: string | null;
   roles: string[];
+}
+
+interface PendingMember {
+  id: number; // BIGSERIAL in DB -> number
+  name: string;
+  email: string;
+  major?: string | null;
+  reason?: string | null;
+  status?: string | null;
 }
 
 export function AdminMembers() {
   const { toast } = useToast();
+
   const [members, setMembers] = useState<Member[]>([]);
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadMembers();
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const loadAll = async () => {
+    setLoading(true);
+    await Promise.all([loadMembers(), loadPendingMembers()]);
+    setLoading(false);
+  };
+
+  // --------------------------
+  // Load Current Members
+  // --------------------------
   const loadMembers = async () => {
-    try {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*');
-      
-      if (profiles) {
-        // Get all roles for each profile
-        const membersWithRoles = await Promise.all(
-          profiles.map(async (profile) => {
-            const { data: rolesData } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', profile.id);
-            
-            const roles = rolesData?.map(r => r.role) || [];
-            
-            return {
-              ...profile,
-              roles: roles.length > 0 ? roles : ['No role assigned']
-            };
-          })
-        );
-        
-        setMembers(membersWithRoles);
-      }
-    } catch (error) {
-      console.error('Error loading members:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const { data: profiles, error: profilesErr } = await supabase
+      .from('profiles')
+      .select('id, name, email, major');
 
-  const handleAcceptApplication = async (id: number) => {
-    const pending = clubDB.pendingMembers.find(m => m.id === id);
-    if (!pending) return;
-
-    toast({
-      title: 'Application Accepted',
-      description: `${pending.name} has been added as a member. An admin should create their account using the "Add Member" button.`,
-    });
-  };
-
-  const handleRejectApplication = async (id: number) => {
-    clubDB.pendingMembers = clubDB.pendingMembers.filter(m => m.id !== id);
-    toast({
-      title: 'Application Rejected',
-      description: 'The application has been removed.',
-    });
-  };
-
-  const handleAcceptRealApplication = async (appId: string, userId: string) => {
-    // Assign member role
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .insert([{ user_id: userId, role: 'member' }]);
-
-    if (roleError) {
+    if (profilesErr) {
+      console.error('Error fetching members:', profilesErr);
       toast({
         title: 'Error',
-        description: 'Failed to accept application',
+        description: 'Failed to load members.',
+        variant: 'destructive',
+      });
+      setMembers([]);
+      return;
+    }
+
+    if (!profiles) {
+      setMembers([]);
+      return;
+    }
+
+    const membersWithRoles = await Promise.all(
+      profiles.map(async (profile: any) => {
+        const { data: roles, error: rolesErr } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', profile.id);
+
+        if (rolesErr) {
+          console.error('Error fetching roles for', profile.id, rolesErr);
+        }
+
+        return {
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          major: profile.major ?? null,
+          roles: roles?.map((r: any) => r.role) ?? ['No role assigned'],
+        } as Member;
+      })
+    );
+
+    setMembers(membersWithRoles);
+  };
+
+  // --------------------------
+  // Load Pending Members
+  // --------------------------
+  const loadPendingMembers = async () => {
+    const { data, error } = await supabase
+      .from('pending_members')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching pending members:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load pending members.',
+        variant: 'destructive',
+      });
+      setPendingMembers([]);
+      return;
+    }
+
+    setPendingMembers((data as PendingMember[]) ?? []);
+  };
+
+  // --------------------------
+  // Accept Pending Member
+  // --------------------------
+  const handleAcceptPendingMember = async (member: PendingMember) => {
+    const ok = window.confirm(`Accept ${member.name} as a member?`);
+    if (!ok) return;
+
+    // Update pending_members.status => 'approved'
+    const { error } = await supabase
+      .from('pending_members')
+      .update({ status: 'approved' })
+      .eq('id', member.id);
+
+    if (error) {
+      console.error('Error accepting pending member:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to accept member.',
         variant: 'destructive',
       });
       return;
     }
 
-    // Update application status
-    await supabase
-      .from('applications')
-      .update({ status: 'accepted' })
-      .eq('id', appId);
-
     toast({
       title: 'Success',
-      description: 'Application accepted! User is now a member.',
+      description: `${member.name} has been approved.`,
     });
-    
-    loadMembers();
+
+    loadAll();
   };
 
-  const handleRejectRealApplication = async (appId: string, userId: string) => {
-    // Delete the application
-    const { error: appError } = await supabase
-      .from('applications')
-      .delete()
-      .eq('id', appId);
+  // --------------------------
+  // Reject Pending Member
+  // --------------------------
+  const handleRejectPendingMember = async (member: PendingMember) => {
+    const ok = window.confirm(`Reject ${member.name}'s application?`);
+    if (!ok) return;
 
-    if (appError) {
+    // Update pending_members.status => 'rejected'
+    const { error } = await supabase
+      .from('pending_members')
+      .update({ status: 'rejected' })
+      .eq('id', member.id);
+
+    if (error) {
+      console.error('Error rejecting pending member:', error);
       toast({
         title: 'Error',
-        description: 'Failed to reject application',
+        description: 'Failed to reject pending member.',
         variant: 'destructive',
       });
       return;
     }
 
-    // Delete user roles if any
-    await supabase.from('user_roles').delete().eq('user_id', userId);
-    
-    // Delete from groups
-    await supabase.from('member_groups').delete().eq('user_id', userId);
-
-    // Delete the user account (admin API call needed)
-    // Note: This requires admin privileges, handled via edge function would be better
-    // For now, we just remove the application and roles
-
     toast({
       title: 'Success',
-      description: 'Application rejected and user removed.',
+      description: `${member.name}'s application has been rejected.`,
     });
-    
-    loadMembers();
+
+    loadAll();
   };
 
+  // --------------------------
+  // Remove Member
+  // --------------------------
   const handleDeleteMember = async (userId: string) => {
-    // Delete user roles
-    await supabase.from('user_roles').delete().eq('user_id', userId);
-    
-    // Delete from groups
-    await supabase.from('member_groups').delete().eq('user_id', userId);
-    
-    // Delete application if exists
-    await supabase.from('applications').delete().eq('user_id', userId);
+    const ok = window.confirm('Are you sure you want to remove this member? This will delete their profile and roles.');
+    if (!ok) return;
+
+    const { error: roleErr } = await supabase.from('user_roles').delete().eq('user_id', userId);
+    if (roleErr) {
+      console.error('Error deleting roles:', roleErr);
+      toast({ title: 'Error', description: 'Failed to delete member roles.', variant: 'destructive' });
+      return;
+    }
+
+    const { error: profileErr } = await supabase.from('profiles').delete().eq('id', userId);
+    if (profileErr) {
+      console.error('Error deleting profile:', profileErr);
+      toast({ title: 'Error', description: 'Failed to delete member profile.', variant: 'destructive' });
+      return;
+    }
 
     toast({
       title: 'Success',
-      description: 'Member removed successfully',
+      description: 'Member removed.',
     });
-    
-    loadMembers();
+
+    loadAll();
   };
 
   return (
@@ -165,11 +212,12 @@ export function AdminMembers() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold mb-2">Member Management</h1>
-          <p className="text-muted-foreground">Manage club members and applications</p>
+          <p className="text-muted-foreground">Manage club members and pending applications</p>
         </div>
+
         <div className="flex gap-2">
-          <AddAdminDialog onSuccess={loadMembers} />
-          <AddMemberDialog onSuccess={loadMembers} />
+          <AddAdminDialog onSuccess={loadAll} />
+          <AddMemberDialog onSuccess={loadAll} />
         </div>
       </div>
 
@@ -177,10 +225,11 @@ export function AdminMembers() {
         <TabsList>
           <TabsTrigger value="members">Current Members</TabsTrigger>
           <TabsTrigger value="pending">
-            Pending Applications ({clubDB.pendingMembers.length})
+            Pending Applications ({pendingMembers.length})
           </TabsTrigger>
         </TabsList>
 
+        {/* ---------------------- Members Tab ---------------------- */}
         <TabsContent value="members" className="space-y-4">
           {loading ? (
             <p>Loading members...</p>
@@ -189,19 +238,20 @@ export function AdminMembers() {
               {members.map((member) => (
                 <Card key={member.id}>
                   <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg mb-2">{member.name}</CardTitle>
-                        <div className="flex flex-wrap gap-1">
-                          {member.roles.map((role, idx) => (
-                            <Badge key={idx} variant="secondary">
+                    <div className="flex justify-between w-full">
+                      <div>
+                        <CardTitle className="text-lg">{member.name}</CardTitle>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {member.roles.map((role, i) => (
+                            <Badge key={`${role}-${i}`} variant="secondary">
                               {role}
                             </Badge>
                           ))}
                         </div>
                       </div>
+
                       <div className="flex gap-2">
-                        <ManageMemberDialog memberId={member.id} memberName={member.name} />
+                        <ManageMemberDialog memberId={member.id} memberName={member.name} onSuccess={loadAll} />
                         <Button
                           variant="destructive"
                           size="sm"
@@ -212,7 +262,8 @@ export function AdminMembers() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2">
+
+                  <CardContent>
                     <p className="text-sm text-muted-foreground">{member.email}</p>
                     <p className="text-sm text-muted-foreground">{member.major}</p>
                   </CardContent>
@@ -222,35 +273,37 @@ export function AdminMembers() {
           )}
         </TabsContent>
 
+        {/* ---------------------- Pending Members Tab ---------------------- */}
         <TabsContent value="pending" className="space-y-4">
-          {clubDB.pendingMembers.length === 0 ? (
+          {pendingMembers.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
-                No pending applications
+                No pending members
               </CardContent>
             </Card>
           ) : (
-            clubDB.pendingMembers.map((member) => (
+            pendingMembers.map((member) => (
               <Card key={member.id}>
                 <CardHeader>
                   <CardTitle>{member.name}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-2">
-                    <p><strong>Email:</strong> {member.email}</p>
-                    <p><strong>Major:</strong> {member.major}</p>
-                    <div>
-                      <strong>Why they want to join:</strong>
-                      <p className="text-muted-foreground mt-1">{member.reason}</p>
-                    </div>
+
+                <CardContent className="space-y-3">
+                  <p><strong>Email:</strong> {member.email}</p>
+                  <p><strong>Major:</strong> {member.major ?? '—'}</p>
+                  <div>
+                    <strong>Reason:</strong>
+                    <p className="text-muted-foreground mt-1">{member.reason ?? '—'}</p>
                   </div>
+
                   <div className="flex gap-2">
-                    <Button onClick={() => handleAcceptApplication(member.id)}>
+                    <Button onClick={() => handleAcceptPendingMember(member)}>
                       Accept
                     </Button>
+
                     <Button
                       variant="outline"
-                      onClick={() => handleRejectApplication(member.id)}
+                      onClick={() => handleRejectPendingMember(member)}
                     >
                       Reject
                     </Button>

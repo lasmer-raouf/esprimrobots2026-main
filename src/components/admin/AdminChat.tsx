@@ -1,103 +1,224 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { clubDB, saveDatabase } from '@/lib/database';
 import { Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 
-interface Member {
+type NormalizedMessage = {
+  id: number;
+  from: string; // sender id or 'admin'
+  to: string; // recipient id or 'admin'
+  content: string;
+  timestamp: number; // ms
+  read: boolean;
+  _raw?: any;
+};
+
+type Member = {
   id: string;
   name: string;
-}
+};
 
 export function AdminChat() {
   const { toast } = useToast();
   const [members, setMembers] = useState<Member[]>([]);
+  const [messages, setMessages] = useState<NormalizedMessage[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [, setUpdate] = useState(0);
+  const mountedRef = useRef(true);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pollingRef = useRef<number | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const scrollToBottom = () =>
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
 
   useEffect(() => {
+    mountedRef.current = true;
     loadMembers();
-    const interval = setInterval(() => {
-      setUpdate(prev => prev + 1);
-    }, 2000);
-    return () => clearInterval(interval);
+    loadMessages();
+    pollingRef.current = window.setInterval(loadMessages, 2000);
+    return () => {
+      mountedRef.current = false;
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Normalize DB row to our shape (handles modern and legacy)
+  const normalize = (row: any): NormalizedMessage => {
+    const createdAt = row.created_at ?? row.sent_at ?? null;
+    const ts = typeof createdAt === 'number' ? createdAt : createdAt ? new Date(createdAt).getTime() : Date.now();
+    const from = row.sender_id ?? row.from ?? row.sender ?? 'unknown';
+    const to = row.recipient_id ?? row.to ?? row.recipient ?? 'admin';
+    return {
+      id: Number(row.id ?? Math.floor(Math.random() * -1000000)),
+      from: String(from),
+      to: String(to),
+      content: String(row.content ?? ''),
+      timestamp: ts,
+      read: Boolean(row.read ?? false),
+      _raw: row,
+    };
+  };
+
+  // Load members
   const loadMembers = async () => {
     try {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name');
-      
-      if (profiles) {
-        setMembers(profiles);
+      const { data, error } = await supabase.from('profiles').select('id, name').order('name', { ascending: true });
+      if (error) {
+        console.error('loadMembers error', error);
+        toast({ title: 'Error', description: 'Failed to load members.', variant: 'destructive' });
+        return;
       }
-    } catch (error) {
-      console.error('Error loading members:', error);
+      if (mountedRef.current) setMembers(data ?? []);
+    } catch (err) {
+      console.error('loadMembers unexpected', err);
     }
   };
 
-  const getUnreadCount = (memberId: string) => {
-    return clubDB.messages.filter(
-      m => m.from === memberId && m.to === 'admin' && !m.read
-    ).length;
+  // Load messages — try modern then fallback to legacy
+  const loadMessages = async () => {
+    try {
+      // Modern: order by created_at
+      const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+      if (!error && data) {
+        if (mountedRef.current) {
+          setMessages((data as any[]).map(normalize));
+          scrollToBottom();
+        }
+        return;
+      }
+
+      // If column missing or other schema error, fallback to legacy
+      if (error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''))) {
+        const { data: d2, error: err2 } = await supabase.from('messages').select('*').order('sent_at', { ascending: true });
+        if (!err2 && d2) {
+          if (mountedRef.current) {
+            setMessages((d2 as any[]).map(normalize));
+            scrollToBottom();
+          }
+          return;
+        }
+        console.error('Both message queries failed', error, err2);
+        toast({ title: 'Error', description: 'Failed to load messages.', variant: 'destructive' });
+        return;
+      }
+
+      if (error) {
+        console.error('loadMessages error', error);
+      }
+    } catch (err) {
+      console.error('loadMessages unexpected', err);
+    }
   };
 
-  const getMemberMessages = (memberId: string) => {
-    return clubDB.messages.filter(
-      m => (m.from === memberId && m.to === 'admin') || (m.from === 'admin' && m.to === memberId)
-    ).sort((a, b) => a.timestamp - b.timestamp);
-  };
+  const getUnreadCount = (memberId: string) =>
+    messages.filter((m) => m.from === memberId && m.to === 'admin' && !m.read).length;
 
-  const handleSend = () => {
-    if (!selectedMemberId || !message.trim()) return;
+  const getMemberMessages = (memberId: string) =>
+    messages.filter((m) => (m.from === memberId && m.to === 'admin') || (m.from === 'admin' && m.to === memberId));
 
-    const newMessage = {
-      id: clubDB.messages.length + 1,
+  // Send: try modern insert first, fallback to legacy
+  const handleSend = async () => {
+    if (!selectedMemberId || !message.trim() || sending) return;
+    setSending(true);
+    const content = message.trim();
+    const optimistic: NormalizedMessage = {
+      id: Date.now(),
       from: 'admin',
       to: selectedMemberId,
-      content: message,
+      content,
       timestamp: Date.now(),
       read: false,
     };
-
-    clubDB.messages.push(newMessage);
-    saveDatabase();
+    setMessages((p) => [...p, optimistic]);
     setMessage('');
+    scrollToBottom();
 
-    toast({
-      title: 'Message Sent',
-      description: 'Your message has been sent.',
-    });
-  };
-
-  const markAsRead = (memberId: string) => {
-    clubDB.messages.forEach(m => {
-      if (m.from === memberId && m.to === 'admin' && !m.read) {
-        m.read = true;
+    try {
+      const payloadModern = {
+        sender_id: 'admin', // admin identity string — adjust if you use a UUID for admin
+        recipient_id: selectedMemberId,
+        content,
+        created_at: new Date().toISOString(),
+        read: false,
+      };
+      const { data, error } = await supabase.from('messages').insert([payloadModern]).select();
+      if (!error && data && data.length > 0) {
+        setMessages((prev) => {
+          const withoutOpt = prev.filter((m) => m.id !== optimistic.id);
+          return [...withoutOpt, normalize(data[0])];
+        });
+        toast({ title: 'Message Sent', description: 'Your message has been sent.' });
+        return;
       }
-    });
-    saveDatabase();
+
+      // If schema error, fallback to legacy
+      if (error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''))) {
+        const payloadLegacy = {
+          from: 'admin',
+          to: selectedMemberId,
+          content,
+          sent_at: new Date().toISOString(),
+          read: false,
+        };
+        const { data: d2, error: err2 } = await supabase.from('messages').insert([payloadLegacy]).select();
+        if (!err2 && d2 && d2.length > 0) {
+          setMessages((prev) => {
+            const withoutOpt = prev.filter((m) => m.id !== optimistic.id);
+            return [...withoutOpt, normalize(d2[0])];
+          });
+          toast({ title: 'Message Sent', description: 'Your message has been sent.' });
+          return;
+        }
+        console.error('Send failed (both shapes)', error, err2);
+        toast({ title: 'Send failed', description: 'Unable to send message.', variant: 'destructive' });
+      } else if (error) {
+        console.error('Send error', error);
+        toast({ title: 'Send failed', description: error.message ?? 'Unable to send message', variant: 'destructive' });
+      }
+    } catch (err) {
+      console.error('Unexpected send error', err);
+      toast({ title: 'Send failed', description: 'Unexpected error.', variant: 'destructive' });
+    } finally {
+      setSending(false);
+      // Refresh messages
+      loadMessages();
+    }
   };
 
-  const handleSelectMember = (memberId: string) => {
-    setSelectedMemberId(memberId);
-    markAsRead(memberId);
+  // Mark all messages from a member as read (tries modern then legacy)
+  const markAsRead = async (memberId: string) => {
+    try {
+      const { error } = await supabase.from('messages').update({ read: true }).eq('sender_id', memberId).eq('read', false);
+      if (!error) {
+        setMessages((prev) => prev.map((m) => (m.from === memberId ? { ...m, read: true } : m)));
+        return;
+      }
+      // fallback
+      const { error: err2 } = await supabase.from('messages').update({ read: true }).eq('from', memberId).eq('read', false);
+      if (!err2) setMessages((prev) => prev.map((m) => (m.from === memberId ? { ...m, read: true } : m)));
+    } catch (err) {
+      console.error('markAsRead error', err);
+    } finally {
+      loadMessages();
+    }
   };
 
-  const selectedMember = members.find(m => m.id === selectedMemberId);
-  const messages = selectedMemberId ? getMemberMessages(selectedMemberId) : [];
+  const selectedMember = members.find((m) => m.id === selectedMemberId);
+  const memberMessages = selectedMemberId ? getMemberMessages(selectedMemberId) : [];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Member Communications</h1>
-        <p className="text-muted-foreground">Chat with club members</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Member Communications</h1>
+          <p className="text-muted-foreground">Chat with club members</p>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
@@ -107,59 +228,45 @@ export function AdminChat() {
           </CardHeader>
           <CardContent className="space-y-2">
             {members.map((member) => {
-              const unreadCount = getUnreadCount(member.id);
+              const unread = getUnreadCount(member.id);
               return (
                 <Button
                   key={member.id}
                   variant={selectedMemberId === member.id ? 'default' : 'ghost'}
                   className="w-full justify-between"
-                  onClick={() => handleSelectMember(member.id)}
+                  onClick={() => {
+                    setSelectedMemberId(member.id);
+                    markAsRead(member.id);
+                  }}
                 >
                   <span>{member.name}</span>
-                  {unreadCount > 0 && (
-                    <Badge variant="destructive" className="ml-2">
-                      {unreadCount}
-                    </Badge>
-                  )}
+                  {unread > 0 && <Badge variant="destructive">{unread}</Badge>}
                 </Button>
               );
             })}
+            {members.length === 0 && <p className="text-sm text-muted-foreground">No members found</p>}
           </CardContent>
         </Card>
 
         <Card className="md:col-span-2 h-[600px] flex flex-col">
           <CardHeader>
-            <CardTitle>
-              {selectedMember ? `Chat with ${selectedMember.name}` : 'Select a member'}
-            </CardTitle>
+            <CardTitle>{selectedMember ? `Chat with ${selectedMember.name}` : 'Select a member'}</CardTitle>
           </CardHeader>
+
           <CardContent className="flex-1 flex flex-col">
             {selectedMember ? (
               <>
-                <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-                  {messages.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">
-                      No messages yet. Start a conversation!
-                    </p>
+                <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 mb-4 px-1">
+                  {memberMessages.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No messages yet. Start a conversation!</p>
                   ) : (
-                    messages.map((msg) => {
+                    memberMessages.map((msg) => {
                       const isFromAdmin = msg.from === 'admin';
                       return (
-                        <div
-                          key={msg.id}
-                          className={`flex ${isFromAdmin ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-[70%] rounded-lg p-3 ${
-                              isFromAdmin
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            <p className="text-sm">{msg.content}</p>
-                            <p className="text-xs opacity-70 mt-1">
-                              {new Date(msg.timestamp).toLocaleTimeString()}
-                            </p>
+                        <div key={msg.id} className={`flex ${isFromAdmin ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[70%] rounded-lg p-3 ${isFromAdmin ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                            <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                            <p className="text-xs opacity-70 mt-1">{new Date(msg.timestamp).toLocaleString()}</p>
                           </div>
                         </div>
                       );
@@ -180,15 +287,13 @@ export function AdminChat() {
                       }
                     }}
                   />
-                  <Button onClick={handleSend}>
+                  <Button onClick={handleSend} disabled={sending}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                Select a member to start chatting
-              </div>
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">Select a member to start chatting</div>
             )}
           </CardContent>
         </Card>

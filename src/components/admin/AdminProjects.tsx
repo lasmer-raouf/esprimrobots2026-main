@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,13 +6,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { clubDB, saveDatabase, Project } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Edit } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  status: 'In Progress' | 'Completed';
+}
 
 export function AdminProjects() {
   const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState({
@@ -21,29 +29,59 @@ export function AdminProjects() {
     status: 'In Progress' as 'In Progress' | 'Completed',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('Error loading projects:', error);
+      return;
+    }
+
+    setProjects(data || []);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (editingProject) {
-      const project = clubDB.projects.find(p => p.id === editingProject.id);
-      if (project) {
-        project.title = formData.title;
-        project.description = formData.description;
-        project.status = formData.status;
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          title: formData.title,
+          description: formData.description,
+          status: formData.status,
+        })
+        .eq('id', editingProject.id);
+
+      if (error) {
+        toast({ title: 'Error', description: 'Failed to update project', variant: 'destructive' });
+        return;
       }
+
       toast({ title: 'Project Updated', description: 'Project has been updated successfully.' });
     } else {
-      const newProject: Project = {
-        id: clubDB.projects.length + 1,
-        ...formData,
-      };
-      clubDB.projects.push(newProject);
+      const { error } = await supabase
+        .from('projects')
+        .insert([formData]);
+
+      if (error) {
+        toast({ title: 'Error', description: 'Failed to create project', variant: 'destructive' });
+        return;
+      }
+
       toast({ title: 'Project Created', description: 'New project has been added.' });
     }
 
-    saveDatabase();
     setDialogOpen(false);
     resetForm();
+    loadProjects();
   };
 
   const handleEdit = (project: Project) => {
@@ -56,10 +94,19 @@ export function AdminProjects() {
     setDialogOpen(true);
   };
 
-  const handleDelete = (id: number) => {
-    clubDB.projects = clubDB.projects.filter(p => p.id !== id);
-    saveDatabase();
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast({ title: 'Error', description: 'Failed to delete project', variant: 'destructive' });
+      return;
+    }
+
     toast({ title: 'Project Deleted', description: 'Project has been removed.' });
+    loadProjects();
   };
 
   const resetForm = () => {
@@ -113,7 +160,7 @@ export function AdminProjects() {
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(value: 'In Progress' | 'Completed') => 
+                  onValueChange={(value: 'In Progress' | 'Completed') =>
                     setFormData({ ...formData, status: value })
                   }
                 >
@@ -135,7 +182,7 @@ export function AdminProjects() {
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {clubDB.projects.map((project) => (
+        {projects.map((project) => (
           <Card key={project.id}>
             <CardHeader>
               <div className="flex items-start justify-between">

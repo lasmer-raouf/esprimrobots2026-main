@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { clubDB } from '@/lib/database';
 import { PublicHeader } from '@/components/PublicHeader';
 import { WelcomePopup } from '@/components/WelcomePopup';
 import { VideoBackground } from '@/components/VideoBackground';
@@ -9,73 +8,86 @@ import { supabase } from '@/integrations/supabase/client';
 
 const typingTexts = ['Innovators.', 'Builders.', 'Engineers.', 'ESPRIM ROBOTS.'];
 
+type Announcement = { id: number; content: string };
+
 export default function Home() {
   const navigate = useNavigate();
   const [typingText, setTypingText] = useState('');
   const [textIndex, setTextIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+
   const [videoUrl, setVideoUrl] = useState('');
   const [videoType, setVideoType] = useState<'local' | 'youtube' | 'none'>('none');
-  const [announcements, setAnnouncements] = useState<Array<{ content: string }>>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  const [showApplyBtn, setShowApplyBtn] = useState(false);
+  const [showInterviewBtn, setShowInterviewBtn] = useState(false);
+  const [showResultBtn, setShowResultBtn] = useState(false);
 
   useEffect(() => {
-    loadVideoSettings();
+    loadSettings();
     loadAnnouncements();
   }, []);
 
-  const loadVideoSettings = async () => {
-    const { data: urlData } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'video_background_url')
-      .single();
+  const loadSettings = async () => {
+    try {
+      const { data, error } = await supabase.from('site_settings').select('key, value');
+      if (error) throw error;
+      if (!data) return;
 
-    const { data: typeData } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'video_background_type')
-      .single();
-
-    if (urlData?.value) setVideoUrl(urlData.value);
-    if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
+      data.forEach(setting => {
+        switch (setting.key) {
+          case 'video_background_url':
+            // prepend /videos/ for local files
+            setVideoUrl(setting.value ? `/videos/${setting.value}` : '');
+            break;
+          case 'video_background_type':
+            setVideoType(setting.value as 'local' | 'youtube' | 'none');
+            break;
+          case 'show_apply_btn':
+            setShowApplyBtn(setting.value === 'true');
+            break;
+          case 'show_interview_btn':
+            setShowInterviewBtn(setting.value === 'true');
+            break;
+          case 'show_result_btn':
+            setShowResultBtn(setting.value === 'true');
+            break;
+        }
+      });
+    } catch (err) {
+      console.error('Error loading settings:', err);
+    }
   };
 
   const loadAnnouncements = async () => {
-    setAnnouncements(clubDB.announcements.map(a => ({ content: a.content })));
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('id, content')
+        .order('id', { ascending: false });
+      if (error) throw error;
+      if (data) setAnnouncements(data);
+    } catch (err) {
+      console.error('Error loading announcements:', err);
+    }
   };
 
+  // Typing effect
   useEffect(() => {
     const currentText = typingTexts[textIndex];
-    
-    // More realistic typing speed with variation
     const getTypingSpeed = () => {
-      if (isDeleting) {
-        return 30 + Math.random() * 20; // Faster deletion: 30-50ms
-      }
-      
-      // Variable typing speed: 80-150ms per character
+      if (isDeleting) return 30 + Math.random() * 20;
       const baseSpeed = 80 + Math.random() * 70;
-      
-      // Slower for punctuation marks
-      if (['.', ',', '!', '?'].includes(currentText[typingText.length])) {
-        return baseSpeed * 2;
-      }
-      
-      // Slight pause after spaces (more natural)
-      if (currentText[typingText.length - 1] === ' ') {
-        return baseSpeed * 1.5;
-      }
-      
+      if (['.', ',', '!', '?'].includes(currentText[typingText.length])) return baseSpeed * 2;
+      if (currentText[typingText.length - 1] === ' ') return baseSpeed * 1.5;
       return baseSpeed;
     };
 
     const timeout = setTimeout(() => {
       if (!isDeleting) {
         setTypingText(currentText.slice(0, typingText.length + 1));
-        if (typingText === currentText) {
-          // Longer, more natural pause at end: 2-3 seconds
-          setTimeout(() => setIsDeleting(true), 2000 + Math.random() * 1000);
-        }
+        if (typingText === currentText) setTimeout(() => setIsDeleting(true), 2000 + Math.random() * 1000);
       } else {
         setTypingText(currentText.slice(0, typingText.length - 1));
         if (typingText === '') {
@@ -92,13 +104,13 @@ export default function Home() {
     <div className="min-h-screen">
       <PublicHeader />
       <WelcomePopup />
-      
+
       {announcements.length > 0 && (
         <div className="announcement-bar bg-primary/10 border-b border-primary/20 py-3 relative">
           <div className="marquee inline-block">
             <span className="text-primary font-semibold text-lg px-8">
-              {announcements.map((a, idx) => (
-                <span key={idx} className="mr-16">
+              {announcements.map(a => (
+                <span key={a.id} className="mr-16">
                   🔔 {a.content}
                 </span>
               ))}
@@ -106,13 +118,11 @@ export default function Home() {
           </div>
         </div>
       )}
-      
+
       <main>
         <section className="relative h-[90vh] flex items-center justify-center overflow-hidden">
           <VideoBackground videoUrl={videoUrl} type={videoType} />
-          
           <div className="absolute inset-0 bg-gradient-to-b from-background via-background/50 to-background z-10" />
-          
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
           
           <div className="relative z-20 text-center px-4 animate-fade-in">
@@ -120,13 +130,13 @@ export default function Home() {
               We are <span className="text-primary">{typingText}</span>
               <span className="inline-block w-1 h-[1em] bg-primary ml-1 animate-[blink_1s_step-end_infinite]" />
             </h1>
-            
+
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto">
               Building the future of robotics, one innovation at a time
             </p>
 
             <div className="flex flex-col gap-4 justify-center items-center px-4">
-              {clubDB.settings.showApplyBtn && (
+              {showApplyBtn && (
                 <Button 
                   size="lg" 
                   className="text-lg px-8 animate-glow w-full sm:w-auto"
@@ -135,7 +145,7 @@ export default function Home() {
                   Apply Now
                 </Button>
               )}
-              {clubDB.settings.showInterviewBtn && (
+              {showInterviewBtn && (
                 <Button 
                   size="lg" 
                   variant="secondary"
@@ -144,7 +154,7 @@ export default function Home() {
                   Interview List
                 </Button>
               )}
-              {clubDB.settings.showResultBtn && (
+              {showResultBtn && (
                 <Button 
                   size="lg" 
                   variant="secondary"

@@ -56,6 +56,7 @@ export interface Announcement {
 export interface ClubDatabase {
   settings: {
     videoFilename: string;
+    forceLocalBackground?: boolean;
     showApplyBtn: boolean;
     showInterviewBtn: boolean;
     showResultBtn: boolean;
@@ -69,13 +70,15 @@ export interface ClubDatabase {
 
 const defaultDatabase: ClubDatabase = {
   settings: {
-    videoFilename: 'hero-video.mp4',
-    showApplyBtn: true,
+    videoFilename: 'Robotics_Club_Logo_Video_Generation.mp4',
+    // When true, always use the local videoFilename as the background and ignore remote/admin settings.
+    forceLocalBackground: true,
+    showApplyBtn: false,
     showInterviewBtn: false,
     showResultBtn: false,
   },
   pendingMembers: [],
-  projects: [
+  projects: [/*
     {
       id: 1,
       title: 'Autonomous Line Following Robot',
@@ -93,9 +96,9 @@ const defaultDatabase: ClubDatabase = {
       title: 'Maze Solving Robot',
       description: 'Autonomous robot that can navigate and solve complex mazes using ultrasonic sensors.',
       status: 'In Progress',
-    },
+    },*/
   ],
-  competitionRobots: [
+  competitionRobots: [/*
     {
       id: 1,
       name: 'AlphaBot',
@@ -116,7 +119,7 @@ const defaultDatabase: ClubDatabase = {
       description: 'All-terrain exploration robot for rescue missions.',
       slots: 4,
       signups: [],
-    },
+    },*/
   ],
   announcements: [
     {

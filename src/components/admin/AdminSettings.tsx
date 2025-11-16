@@ -6,318 +6,204 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { clubDB, saveDatabase } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Announcement {
+  id: number;
+  content: string;
+  date: string;
+}
 
 export function AdminSettings() {
   const { toast } = useToast();
-  const [showApplyBtn, setShowApplyBtn] = useState(clubDB.settings.showApplyBtn);
-  const [showInterviewBtn, setShowInterviewBtn] = useState(clubDB.settings.showInterviewBtn);
-  const [showResultBtn, setShowResultBtn] = useState(clubDB.settings.showResultBtn);
+  const [showApplyBtn, setShowApplyBtn] = useState(false);
+  const [showInterviewBtn, setShowInterviewBtn] = useState(false);
+  const [showResultBtn, setShowResultBtn] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [videoUrl, setVideoUrl] = useState('');
   const [videoType, setVideoType] = useState<'local' | 'youtube' | 'none'>('none');
   const [welcomePopupText, setWelcomePopupText] = useState('');
 
   useEffect(() => {
-    loadVideoSettings();
-    loadWelcomePopupText();
+    loadSettings();
+    loadAnnouncements();
   }, []);
 
-  const loadVideoSettings = async () => {
-    const { data: urlData } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'video_background_url')
-      .maybeSingle();
+  const loadSettings = async () => {
+    const { data } = await supabase.from('site_settings').select('*');
 
-    const { data: typeData } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'video_background_type')
-      .maybeSingle();
-
-    if (urlData?.value) setVideoUrl(urlData.value);
-    if (typeData?.value) setVideoType(typeData.value as 'local' | 'youtube' | 'none');
+    if (data) {
+      setShowApplyBtn(data.find(s => s.key === 'show_apply_btn')?.value === 'true');
+      setShowInterviewBtn(data.find(s => s.key === 'show_interview_btn')?.value === 'true');
+      setShowResultBtn(data.find(s => s.key === 'show_result_btn')?.value === 'true');
+      setVideoUrl(data.find(s => s.key === 'video_background_url')?.value || '');
+      setVideoType((data.find(s => s.key === 'video_background_type')?.value as any) || 'none');
+      setWelcomePopupText(data.find(s => s.key === 'welcome_popup_text')?.value || '');
+    }
   };
 
-  const loadWelcomePopupText = async () => {
-    const { data } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'welcome_popup_text')
-      .maybeSingle();
-
-    if (data?.value) setWelcomePopupText(data.value);
+  const loadAnnouncements = async () => {
+    const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('Error loading announcements:', error);
+      return;
+    }
+    setAnnouncements(data || []);
   };
 
-  const handleSaveSettings = () => {
-    clubDB.settings.showApplyBtn = showApplyBtn;
-    clubDB.settings.showInterviewBtn = showInterviewBtn;
-    clubDB.settings.showResultBtn = showResultBtn;
-    saveDatabase();
-    
-    toast({
-      title: 'Settings Saved',
-      description: 'Site settings have been updated successfully.',
-    });
+  const saveSetting = async (key: string, value: string) => {
+    await supabase.from('site_settings').upsert({ key, value }, { onConflict: 'key' });
   };
 
-  const handleAddAnnouncement = () => {
+  const handleSaveSettings = async () => {
+    await saveSetting('show_apply_btn', showApplyBtn.toString());
+    await saveSetting('show_interview_btn', showInterviewBtn.toString());
+    await saveSetting('show_result_btn', showResultBtn.toString());
+    toast({ title: 'Settings Saved', description: 'Site settings have been updated successfully.' });
+  };
+
+  const handleAddAnnouncement = async () => {
     if (!newAnnouncement.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter an announcement message.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Please enter an announcement message.', variant: 'destructive' });
       return;
     }
 
-    clubDB.announcements.push({
-      id: clubDB.announcements.length + 1,
-      content: newAnnouncement,
-      date: Date.now(),
-    });
+    const { data, error } = await supabase
+      .from('announcements')
+      .insert([{ content: newAnnouncement, date: new Date().toISOString() }])
+      .select();
 
-    saveDatabase();
+    if (error || !data) {
+      toast({ title: 'Error', description: 'Failed to add announcement.', variant: 'destructive' });
+      return;
+    }
+
+    setAnnouncements(prev => [data[0], ...prev]);
     setNewAnnouncement('');
-
-    toast({
-      title: 'Announcement Added',
-      description: 'New announcement has been posted.',
-    });
+    toast({ title: 'Announcement Added', description: 'New announcement has been posted.' });
   };
 
-  const handleDeleteAnnouncement = (id: number) => {
-    clubDB.announcements = clubDB.announcements.filter(a => a.id !== id);
-    saveDatabase();
-
-    toast({
-      title: 'Announcement Deleted',
-      description: 'The announcement has been removed.',
-    });
+  const handleDeleteAnnouncement = async (id: number) => {
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: 'Failed to delete announcement.', variant: 'destructive' });
+      return;
+    }
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
+    toast({ title: 'Announcement Deleted', description: 'The announcement has been removed.' });
   };
 
   const handleSaveVideoSettings = async () => {
-    try {
-      await supabase
-        .from('site_settings')
-        .upsert({ key: 'video_background_url', value: videoUrl }, { onConflict: 'key' });
-
-      await supabase
-        .from('site_settings')
-        .upsert({ key: 'video_background_type', value: videoType }, { onConflict: 'key' });
-
-      toast({
-        title: 'Video Settings Saved',
-        description: 'Background video settings have been updated.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save video settings.',
-        variant: 'destructive',
-      });
-    }
+    await saveSetting('video_background_url', videoUrl);
+    await saveSetting('video_background_type', videoType);
+    toast({ title: 'Video Settings Saved', description: 'Background video settings have been updated.' });
   };
 
   const handleSaveWelcomePopup = async () => {
-    try {
-      await supabase
-        .from('site_settings')
-        .upsert({ key: 'welcome_popup_text', value: welcomePopupText }, { onConflict: 'key' });
-
-      toast({
-        title: 'Welcome Popup Saved',
-        description: 'Welcome popup message has been updated.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save welcome popup.',
-        variant: 'destructive',
-      });
-    }
+    await saveSetting('welcome_popup_text', welcomePopupText);
+    toast({ title: 'Welcome Popup Saved', description: 'Welcome popup message has been updated.' });
   };
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Site Settings</h1>
-        <p className="text-muted-foreground">Manage website configuration</p>
-      </div>
-
+      {/* Hero Buttons */}
       <Card>
         <CardHeader>
           <CardTitle>Hero Buttons Visibility</CardTitle>
           <CardDescription>Control which buttons appear on the home page</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="apply-btn" className="flex-1">
-              <div>
-                <p className="font-medium">Apply Now Button</p>
-                <p className="text-sm text-muted-foreground">Show the membership application button</p>
-              </div>
-            </Label>
-            <Switch
-              id="apply-btn"
-              checked={showApplyBtn}
-              onCheckedChange={setShowApplyBtn}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="interview-btn" className="flex-1">
-              <div>
-                <p className="font-medium">Interview List Button</p>
-                <p className="text-sm text-muted-foreground">Show the interview schedule button</p>
-              </div>
-            </Label>
-            <Switch
-              id="interview-btn"
-              checked={showInterviewBtn}
-              onCheckedChange={setShowInterviewBtn}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="result-btn" className="flex-1">
-              <div>
-                <p className="font-medium">Interview Results Button</p>
-                <p className="text-sm text-muted-foreground">Show the interview results button</p>
-              </div>
-            </Label>
-            <Switch
-              id="result-btn"
-              checked={showResultBtn}
-              onCheckedChange={setShowResultBtn}
-            />
-          </div>
-
-          <Button onClick={handleSaveSettings} className="w-full">
-            Save Settings
-          </Button>
+          {[
+            { label: 'Apply Now Button', desc: 'Show the membership application button', state: showApplyBtn, setState: setShowApplyBtn },
+            { label: 'Interview List Button', desc: 'Show the interview schedule button', state: showInterviewBtn, setState: setShowInterviewBtn },
+            { label: 'Interview Results Button', desc: 'Show the interview results button', state: showResultBtn, setState: setShowResultBtn },
+          ].map((btn, i) => (
+            <div key={i} className="flex items-center justify-between">
+              <Label className="flex-1">
+                <div>
+                  <p className="font-medium">{btn.label}</p>
+                  <p className="text-sm text-muted-foreground">{btn.desc}</p>
+                </div>
+              </Label>
+              <Switch checked={btn.state} onCheckedChange={btn.setState} />
+            </div>
+          ))}
+          <Button onClick={handleSaveSettings} className="w-full">Save Settings</Button>
         </CardContent>
       </Card>
 
+      {/* Announcements */}
       <Card>
         <CardHeader>
           <CardTitle>Announcements</CardTitle>
           <CardDescription>Manage site-wide announcements</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-4">
-            {clubDB.announcements.map((announcement) => (
-              <div key={announcement.id} className="p-4 bg-muted rounded-lg flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <p>{announcement.content}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {new Date(announcement.date).toLocaleDateString()}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteAnnouncement(announcement.id)}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+          {announcements.map((a) => (
+            <div key={a.id} className="p-4 bg-muted rounded-lg flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p>{a.content}</p>
+                <p className="text-xs text-muted-foreground mt-2">{new Date(a.date).toLocaleDateString()}</p>
               </div>
-            ))}
-          </div>
-
+              <Button variant="ghost" size="icon" onClick={() => handleDeleteAnnouncement(a.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
           <div className="space-y-4">
             <Label htmlFor="new-announcement">Add New Announcement</Label>
-            <Textarea
-              id="new-announcement"
-              value={newAnnouncement}
-              onChange={(e) => setNewAnnouncement(e.target.value)}
-              placeholder="Enter announcement message..."
-              rows={3}
-            />
-            <Button onClick={handleAddAnnouncement}>
-              Post Announcement
-            </Button>
+            <Textarea id="new-announcement" value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} />
+            <Button onClick={handleAddAnnouncement}>Post Announcement</Button>
           </div>
         </CardContent>
       </Card>
 
+      {/* Welcome Popup */}
       <Card>
         <CardHeader>
           <CardTitle>Welcome Popup</CardTitle>
           <CardDescription>Set a message that appears when users visit the site for the first time</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="welcome-popup">Welcome Message</Label>
-            <Textarea
-              id="welcome-popup"
-              value={welcomePopupText}
-              onChange={(e) => setWelcomePopupText(e.target.value)}
-              placeholder="Enter your welcome message here..."
-              rows={5}
-            />
-            <p className="text-xs text-muted-foreground">
-              This message will be shown in a popup dialog when users visit your site for the first time. Leave empty to disable the popup.
-            </p>
-          </div>
-
-          <Button onClick={handleSaveWelcomePopup} className="w-full">
-            Save Welcome Popup
-          </Button>
+          <Textarea
+            value={welcomePopupText}
+            onChange={(e) => setWelcomePopupText(e.target.value)}
+            rows={5}
+            placeholder="Enter your welcome message here..."
+          />
+          <Button onClick={handleSaveWelcomePopup} className="w-full">Save Welcome Popup</Button>
         </CardContent>
       </Card>
 
+      {/* Video Background */}
       <Card>
         <CardHeader>
           <CardTitle>Video Background</CardTitle>
           <CardDescription>Set a video background for the home page hero section</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="video-type">Video Type</Label>
-            <Select value={videoType} onValueChange={(value) => setVideoType(value as 'local' | 'youtube' | 'none')}>
-              <SelectTrigger id="video-type">
-                <SelectValue placeholder="Select video type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No Video</SelectItem>
-                <SelectItem value="local">Local Video File</SelectItem>
-                <SelectItem value="youtube">YouTube Video</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={videoType} onValueChange={(v) => setVideoType(v as 'local' | 'youtube' | 'none')}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select video type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No Video</SelectItem>
+              <SelectItem value="local">Local Video File</SelectItem>
+              <SelectItem value="youtube">YouTube Video</SelectItem>
+            </SelectContent>
+          </Select>
 
           {videoType !== 'none' && (
-            <div className="space-y-2">
-              <Label htmlFor="video-url">
-                {videoType === 'local' ? 'Video File URL' : 'YouTube Video URL'}
-              </Label>
-              <Input
-                id="video-url"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder={
-                  videoType === 'local'
-                    ? 'https://example.com/video.mp4'
-                    : 'https://www.youtube.com/watch?v=...'
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                {videoType === 'local'
-                  ? 'Enter the direct URL to your video file (MP4 format recommended)'
-                  : 'Paste any YouTube video URL (watch, share, or embed format)'}
-              </p>
-            </div>
+            <>
+              <Label>{videoType === 'local' ? 'Video File URL' : 'YouTube Video URL'}</Label>
+              <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder={videoType === 'local' ? 'https://example.com/video.mp4' : 'https://www.youtube.com/watch?v=...'} />
+            </>
           )}
 
-          <Button onClick={handleSaveVideoSettings} className="w-full">
-            Save Video Settings
-          </Button>
+          <Button onClick={handleSaveVideoSettings} className="w-full">Save Video Settings</Button>
         </CardContent>
       </Card>
     </div>
