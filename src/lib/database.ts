@@ -124,7 +124,7 @@ const defaultDatabase: ClubDatabase = {
   announcements: [
     {
       id: 1,
-      content: 'Welcome to ESPRIM ROBOTS! Applications are now open for new members.',
+      content: 'Welcome to IEEE RAS ESPRIM SB! Applications are now open for new members.',
       date: Date.now(),
     },
   ],

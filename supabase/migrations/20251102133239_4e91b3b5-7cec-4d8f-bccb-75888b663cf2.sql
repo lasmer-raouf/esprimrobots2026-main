@@ -29,6 +29,6 @@ CREATE POLICY "Admins can insert site settings"
 
 -- Insert default About Us content
 INSERT INTO public.site_settings (key, value) VALUES
-  ('about_us_title', 'About ESPRIM ROBOTS'),
+  ('about_us_title', 'About IEEE RAS ESPRIM SB'),
   ('about_us_content', 'We are a passionate community of robotics enthusiasts dedicated to innovation, learning, and competition. Our club brings together students from diverse backgrounds to collaborate on cutting-edge robotics projects and compete at national and international levels.')
 ON CONFLICT (key) DO NOTHING;

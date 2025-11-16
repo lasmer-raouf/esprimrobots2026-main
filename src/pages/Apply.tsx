@@ -161,7 +161,7 @@ export default function Apply() {
                 </div>
 
                 <div>
-                  <Label htmlFor="reason">Why do you want to join ESPRIM ROBOTS?</Label>
+                  <Label htmlFor="reason">Why do you want to join IEEE RAS ESPRIM SB?</Label>
                   <Textarea
                     id="reason"
                     value={formData.reason}
