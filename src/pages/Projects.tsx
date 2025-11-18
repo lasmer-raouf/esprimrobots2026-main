@@ -31,7 +31,7 @@ export default function Projects() {
         .from<Project>('projects')
         .select('id, title, description, status, image_url, created_at')
         .order('created_at', { ascending: false });
-
+        console.log(data);
       if (sbError) {
         console.error('Supabase error loading projects:', sbError);
         setError(sbError);

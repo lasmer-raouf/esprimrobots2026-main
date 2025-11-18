@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, Home, Users, FolderKanban, Trophy, MessageSquare, Settings, Shield, Info, UserCircle, Calendar, UserPlus, UsersRound, Newspaper } from 'lucide-react';
+import { LogOut, Home, Users, FolderKanban, Trophy, MessageSquare, Settings, Shield, Info, UserCircle, Calendar, UsersRound, Newspaper } from 'lucide-react';
 import { AdminOverview } from '@/components/admin/AdminOverview';
 import { AdminMembers } from '@/components/admin/AdminMembers';
 import { AdminProjects } from '@/components/admin/AdminProjects';
@@ -12,7 +12,6 @@ import { AdminSettings } from '@/components/admin/AdminSettings';
 import { AdminRoles } from '@/components/admin/AdminRoles';
 import { AdminAbout } from '@/components/admin/AdminAbout';
 import { AdminEvents } from '@/components/admin/AdminEvents';
-import { AdminApplications } from '@/components/admin/AdminApplications';
 import { AdminGroups } from '@/components/admin/AdminGroups';
 import { AdminNews } from '@/components/admin/AdminNews';
 
@@ -117,14 +116,6 @@ export default function AdminDashboard() {
             Events
           </Button>
           <Button
-            variant={currentPage === 'applications' ? 'default' : 'ghost'}
-            className="w-full justify-start"
-            onClick={() => setCurrentPage('applications')}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Applications
-          </Button>
-          <Button
             variant={currentPage === 'groups' ? 'default' : 'ghost'}
             className="w-full justify-start"
             onClick={() => setCurrentPage('groups')}
@@ -180,7 +171,6 @@ export default function AdminDashboard() {
         {currentPage === 'roles' && <AdminRoles />}
         {currentPage === 'about' && <AdminAbout />}
         {currentPage === 'events' && <AdminEvents />}
-        {currentPage === 'applications' && <AdminApplications />}
         {currentPage === 'groups' && <AdminGroups />}
         {currentPage === 'news' && <AdminNews />}
       </main>

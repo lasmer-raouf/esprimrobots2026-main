@@ -43,7 +43,7 @@ export function PublicHeader() {
             onClick={() => navigate('/')}
             className="text-xl font-bold tracking-tight hover:text-primary transition-colors"
           >
-            IEEE RAS ESPRIM SB
+            ESPRIM ROBOTS
           </button>
 
           {/* MOBILE MENU TRIGGER */}

@@ -13,48 +13,6 @@ export type Database = {
 
   public: {
     Tables: {
-      applications: {
-        Row: {
-          created_at: string;
-          id: string;
-          interview_date: string | null;
-          interview_location: string | null;
-          notes: string | null;
-          status: string;
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          interview_date?: string | null;
-          interview_location?: string | null;
-          notes?: string | null;
-          status?: string;
-          updated_at?: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          interview_date?: string | null;
-          interview_location?: string | null;
-          notes?: string | null;
-          status?: string;
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "applications_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
-
       certificates: {
         Row: {
           id: string;
@@ -274,6 +232,13 @@ export type Database = {
           major: string | null;
           name: string;
           updated_at: string;
+
+          /** Application fields merged into profiles */
+          application_status: string; // 'pending' | 'accepted' | 'rejected' (CHECK constraint in DB)
+          application_interview_date: string | null;
+          application_interview_location: string | null;
+          application_notes: string | null;
+          application_submitted_at: string;
         };
         Insert: {
           bio?: string | null;
@@ -287,6 +252,13 @@ export type Database = {
           major?: string | null;
           name: string;
           updated_at?: string;
+
+          /** optional application fields on insert */
+          application_status?: string;
+          application_interview_date?: string | null;
+          application_interview_location?: string | null;
+          application_notes?: string | null;
+          application_submitted_at?: string;
         };
         Update: {
           bio?: string | null;
@@ -300,6 +272,13 @@ export type Database = {
           major?: string | null;
           name?: string;
           updated_at?: string;
+
+          /** application fields editable */
+          application_status?: string;
+          application_interview_date?: string | null;
+          application_interview_location?: string | null;
+          application_notes?: string | null;
+          application_submitted_at?: string;
         };
         Relationships: [];
       };
@@ -401,8 +380,8 @@ export type Database = {
       };
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"];
           _user_id: string;
+          _role: Database["public"]["Enums"]["app_role"];
         };
         Returns: boolean;
       };

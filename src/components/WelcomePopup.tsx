@@ -49,7 +49,7 @@ export function WelcomePopup() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Welcome to IEEE RAS ESPRIM SB!</DialogTitle>
+          <DialogTitle>Welcome to ESPRIM ROBOTS!</DialogTitle>
           <DialogDescription className="text-base pt-4 whitespace-pre-line">
             {welcomeText}
           </DialogDescription>
