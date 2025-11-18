@@ -6,7 +6,7 @@ import { WelcomePopup } from '@/components/WelcomePopup';
 import { VideoBackground } from '@/components/VideoBackground';
 import { supabase } from '@/integrations/supabase/client';
 
-const typingTexts = ['Innovators.', 'Builders.', 'Engineers.', 'ESPRIM ROBOTS.'];
+const typingTexts = ['Innovators.', 'Builders.', 'Engineers.', 'IEEE RAS ESPRIM SB.'];
 
 type Announcement = { id: number; content: string };
 

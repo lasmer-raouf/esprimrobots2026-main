@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 type FormData = {
   name: string;
   email: string;
-  password: string;
   major: string;
   reason: string;
 };
@@ -24,21 +23,22 @@ export default function Apply() {
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
-    password: '',
     major: '',
     reason: '',
   });
 
   const [submitting, setSubmitting] = useState(false);
 
-  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePassword = (password: string) => password.length >= 6;
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const { name, email, password, major, reason } = formData;
 
-    if (!name.trim() || !email.trim() || !password.trim() || !major.trim() || !reason.trim()) {
+    const { name, email, major, reason } = formData;
+
+    if (!name.trim() || !email.trim() || !major.trim() || !reason.trim()) {
       toast({
         title: 'Error',
         description: 'Please fill in all fields.',
@@ -56,15 +56,6 @@ export default function Apply() {
       return;
     }
 
-    if (!validatePassword(password)) {
-      toast({
-        title: 'Weak password',
-        description: 'Password must be at least 6 characters long.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setSubmitting(true);
 
     try {
@@ -75,154 +66,28 @@ export default function Apply() {
         reason: reason.trim(),
       };
 
-      const signupMeta = {
-        name: payload.name,
-        major: payload.major,
-        application_major: payload.major,
-        application_reason: payload.reason,
-        application_notes: payload.reason,
-        reason: payload.reason,
-      };
+      const { data, error } = await supabase
+        .from('pending_members')
+        .insert([payload])
+        .select('id')
+        .single();
 
-      // sign up user (v2-style). cast to any for tolerance across client versions
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: payload.email,
-        password,
-        options: { data: signupMeta },
-      } as any);
-
-      if (signUpError) {
-        console.error('SignUp error:', signUpError);
-        if (/already registered|duplicate|user exists/i.test(signUpError.message || '')) {
-          toast({
-            title: 'Email already in use',
-            description:
-              'This email is already registered. If this is you, please sign in or use password reset.',
-            variant: 'destructive',
-          });
-        } else {
-          toast({
-            title: 'Sign up failed',
-            description: signUpError.message ?? 'Failed to create account.',
-            variant: 'destructive',
-          });
-        }
-        setSubmitting(false);
-        return;
-      }
-
-      // Normalize signUp response for user & session extraction
-      let user: any = null;
-      let session: any = null;
-
-      if ((signUpData as any)?.user) {
-        user = (signUpData as any).user;
-      } else if ((signUpData as any)?.data?.user) {
-        user = (signUpData as any).data.user;
-      } else if ((signUpData as any)?.data) {
-        user = (signUpData as any).data;
-      } else {
-        user = signUpData as any;
-      }
-
-      // try to find session in signUpData as well (some client versions return it)
-      session = (signUpData as any)?.session ?? (signUpData as any)?.data?.session ?? null;
-
-      // as fallback, ask supabase client for current session
-      try {
-        const sessionResp = await supabase.auth.getSession();
-        if (sessionResp?.data?.session) {
-          session = sessionResp.data.session;
-        }
-      } catch (e) {
-        // ignore — we'll handle absence of session below
-      }
-
-      // Try to get user id (some flows return user, others require getUser)
-      const userId =
-        user?.id ?? (await supabase.auth.getUser()).data?.user?.id ?? null;
-
-      // If there's no userId, inform the user and exit
-      if (!userId) {
+      if (error) {
+        console.error('Supabase insert error:', error);
         toast({
-          title: 'Application received — verify your email',
-          description:
-            'We created an account for you. Please check your email and confirm the address to complete your application.',
-        });
-        setSubmitting(false);
-        navigate('/');
-        return;
-      }
-
-      // If no active session, **do not** attempt protected DB writes from the client
-      // (they will fail due to RLS / anon user). Rely on the DB trigger to create profile.
-      if (!session) {
-        toast({
-          title: 'Verify your email',
-          description:
-            'We created an account for you. Please confirm your email address — once confirmed your profile will be finalized and you can sign in.',
-        });
-        setSubmitting(false);
-        navigate('/');
-        return;
-      }
-
-      // From here: there's an active session (user is signed in). Safe to call protected endpoints.
-
-      // Upsert profile so major & application_reason appear immediately in UI
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: userId,
-            name: payload.name,
-            email: payload.email,
-            major: payload.major,
-            application_status: 'pending',
-            application_notes: payload.reason,
-            application_reason: payload.reason,
-            application_submitted_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        );
-
-      if (upsertError) {
-        // not fatal - log and continue
-        console.warn('Profile upsert error (non-fatal):', upsertError);
-      }
-
-      // Assign member role using upsert (avoid duplicates)
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .upsert(
-          [
-            {
-              user_id: userId,
-              role: 'member',
-            },
-          ],
-          { onConflict: 'user_id,role' }
-        );
-
-      if (roleError) {
-        console.error('Role assignment error:', roleError);
-        toast({
-          title: 'Role assignment failed',
-          description:
-            roleError.message ?? 'We could not assign the member role. An admin can assign it later.',
+          title: 'Submission failed',
+          description: error.message ?? 'Failed to submit your application.',
           variant: 'destructive',
         });
-        // continue — application stored.
+        return;
       }
 
       toast({
         title: 'Application Submitted!',
-        description:
-          'Your account was created and your application was submitted. We will review it shortly.',
+        description: 'We received your application and will review it shortly.',
       });
 
-      setSubmitting(false);
-      navigate('/');
+      setTimeout(() => navigate('/'), 900);
     } catch (err) {
       console.error('Unexpected error:', err);
       toast({
@@ -230,6 +95,7 @@ export default function Apply() {
         description: 'An unexpected error occurred. Please try again later.',
         variant: 'destructive',
       });
+    } finally {
       setSubmitting(false);
     }
   };
@@ -283,20 +149,6 @@ export default function Apply() {
                 </div>
 
                 <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => update('password', e.target.value)}
-                    placeholder="Create a password (min 6 characters)"
-                    required
-                    aria-required="true"
-                    minLength={6}
-                  />
-                </div>
-
-                <div>
                   <Label htmlFor="major">Major / Field of Study</Label>
                   <Input
                     id="major"
@@ -309,7 +161,7 @@ export default function Apply() {
                 </div>
 
                 <div>
-                  <Label htmlFor="reason">Why do you want to join ESPRIM ROBOTS?</Label>
+                  <Label htmlFor="reason">Why do you want to join IEEE RAS ESPRIM SB?</Label>
                   <Textarea
                     id="reason"
                     value={formData.reason}
