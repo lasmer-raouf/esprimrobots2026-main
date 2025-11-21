@@ -46,6 +46,32 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 0 0% 20%;
     --sidebar-ring: 348 88% 51%;
+    --avatar-A: #f87171; /* red-400 */
+    --avatar-B: #fb923c; /* orange-400 */
+    --avatar-C: #facc15; /* yellow-400 */
+    --avatar-D: #34d399; /* emerald-400 */
+    --avatar-E: #38bdf8; /* sky-400 */
+    --avatar-F: #c084fc; /* violet-400 */
+    --avatar-G: #fb7185; /* pink-400 */
+    --avatar-H: #f43f5e; /* rose-400 */
+    --avatar-I: #fbbf24; /* amber-400 */
+    --avatar-J: #10b981; /* emerald-500 */
+    --avatar-K: #3b82f6; /* blue-500 */
+    --avatar-L: #8b5cf6; /* purple-500 */
+    --avatar-M: #d946ef; /* fuchsia-500 */
+    --avatar-N: #dc2626; /* red-600 */
+    --avatar-O: #f59e0b; /* amber-500 */
+    --avatar-P: #14b8a6; /* teal-500 */
+    --avatar-Q: #2563eb; /* blue-600 */
+    --avatar-R: #7c3aed; /* violet-600 */
+    --avatar-S: #db2777; /* pink-600 */
+    --avatar-T: #b91c1c; /* red-700 */
+    --avatar-U: #f97316; /* orange-500 */
+    --avatar-V: #059669; /* emerald-600 */
+    --avatar-W: #1d4ed8; /* blue-700 */
+    --avatar-X: #6d28d9; /* purple-700 */
+    --avatar-Y: #e11d48; /* rose-600 */
+    --avatar-Z: #991b1b; /* red-800 */
   }
 }
 
@@ -64,7 +90,7 @@ All colors MUST be HSL.
   .flip-card {
     perspective: 1000px;
   }
-  
+
   .flip-card-inner {
     position: relative;
     width: 100%;
@@ -72,11 +98,11 @@ All colors MUST be HSL.
     transition: transform 0.6s;
     transform-style: preserve-3d;
   }
-  
+
   .flip-card:hover .flip-card-inner {
     transform: rotateY(180deg);
   }
-  
+
   .flip-card-front,
   .flip-card-back {
     position: absolute;
@@ -85,7 +111,7 @@ All colors MUST be HSL.
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
   }
-  
+
   .flip-card-back {
     transform: rotateY(180deg);
   }

@@ -49,8 +49,7 @@ export default function News() {
           <h1 className="text-4xl md:text-5xl font-bold text-center">Club News</h1>
         </div>
         <p className="text-center text-muted-foreground mb-16 text-lg">
-          Stay updated with the latest news and announcements from ESPRIM ROBOTS
-        </p>
+          Stay updated with the latest news and announcements from IEEE RAS ESPRIM SBC        </p>
 
         {loading ? (
           <div className="text-center">Loading news...</div>

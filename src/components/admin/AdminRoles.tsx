@@ -16,7 +16,8 @@ import { Trash2, Plus, Save } from 'lucide-react';
 interface UserRole {
   id: string;
   user_id: string;
-  role: 'admin' | 'member' | string; // DB could have other values, but UI will only show admin/member
+  // DB could have other values, but UI will only show admin/member/founder/executive
+  role: 'admin' | 'member' | 'founder' | 'executive' | string;
   created_at: string;
   profiles?: {
     name: string;
@@ -44,9 +45,14 @@ export function AdminRoles() {
   // per-row role state (maps user_roles.id => role string)
   const [rowRoles, setRowRoles] = useState<Record<string, string>>({});
 
-  // allowed roles — only admin and member per request
-  const allowedRoles = ['admin', 'member'] as const;
-  const roleLabels: Record<string, string> = { admin: 'Admin', member: 'Member' };
+  // allowed roles — now includes founder and executive
+  const allowedRoles = ['admin', 'member', 'founder', 'executive'] as const;
+  const roleLabels: Record<string, string> = {
+    admin: 'Admin',
+    member: 'Member',
+    founder: 'Founder',
+    executive: 'Executive',
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -72,7 +78,7 @@ export function AdminRoles() {
 
       const rolesList = (rolesData || []) as any[];
 
-      // FILTER: only keep roles that are admin or member
+      // FILTER: only keep allowed roles (now includes founder & executive)
       const filteredRolesList = rolesList.filter((r) => allowedRoles.includes(r.role));
 
       const userIds = Array.from(new Set(filteredRolesList.map((r) => r.user_id))).filter(Boolean);
@@ -239,7 +245,7 @@ export function AdminRoles() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Role Management</h1>
-        <p className="text-muted-foreground mt-2">Manage user roles (admin & member only)</p>
+        <p className="text-muted-foreground mt-2">Manage user roles (admin, member, founder, executive)</p>
       </div>
 
       <Card>
@@ -319,11 +325,15 @@ export function AdminRoles() {
                         <p className="text-sm text-muted-foreground truncate">{userRole.profiles?.email}</p>
                       </div>
 
-                      {/* Role badge */}
+                      {/* Role badge with colors for new roles */}
                       <div>
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            userRole.role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                            userRole.role === 'admin' ? 'bg-red-100 text-red-800'
+                              : userRole.role === 'member' ? 'bg-blue-100 text-blue-800'
+                              : userRole.role === 'founder' ? 'bg-emerald-100 text-emerald-800'
+                              : userRole.role === 'executive' ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
                           }`}
                         >
                           {roleLabels[userRole.role] ?? userRole.role}
@@ -335,36 +345,28 @@ export function AdminRoles() {
                       <div className="min-w-[300px]">
                         <Label>Role</Label>
 
-
-
-
-                        
-
                         <div className="flex gap-2 mt-2 md:mt-0">
                           <Select value={rowRoles[userRole.id] ?? userRole.role} onValueChange={(val) => setRowRole(userRole.id, val)}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {allowedRoles.map((r) => (
-                              <SelectItem key={r} value={r}>
-                                {roleLabels[r] ?? r}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button onClick={() => handleUpdateRole(userRole.id)} title="Save role">
-                          <Save className="mr-2 h-4 w-4" /> Save
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          
-                          onClick={() => handleDeleteRole(userRole.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {allowedRoles.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                  {roleLabels[r] ?? r}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button onClick={() => handleUpdateRole(userRole.id)} title="Save role">
+                            <Save className="mr-2 h-4 w-4" /> Save
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleDeleteRole(userRole.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      </div>
-
-                      
                     </div>
                   </div>
                 </div>

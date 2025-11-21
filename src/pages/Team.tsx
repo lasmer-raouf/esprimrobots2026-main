@@ -117,8 +117,7 @@ export default function Team() {
       <main className="container mx-auto px-4 py-16">
         <h1 className="text-4xl md:text-5xl font-bold text-center mb-4">Our Team</h1>
         <p className="text-center text-muted-foreground mb-16 text-lg">
-          Meet the brilliant minds behind ESPRIM ROBOTS
-        </p>
+          Meet the brilliant minds behind IEEE RAS ESPRIM SBC        </p>
 
         {founder && (
           <div className="mb-12">

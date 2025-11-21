@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -14,6 +19,34 @@ export default {
     },
     extend: {
       colors: {
+        avatar: {
+          A: "var(--avatar-A)",
+          B: "var(--avatar-B)",
+          C: "var(--avatar-C)",
+          D: "var(--avatar-D)",
+          E: "var(--avatar-E)",
+          F: "var(--avatar-F)",
+          G: "var(--avatar-G)",
+          H: "var(--avatar-H)",
+          I: "var(--avatar-I)",
+          J: "var(--avatar-J)",
+          K: "var(--avatar-K)",
+          L: "var(--avatar-L)",
+          M: "var(--avatar-M)",
+          N: "var(--avatar-N)",
+          O: "var(--avatar-O)",
+          P: "var(--avatar-P)",
+          Q: "var(--avatar-Q)",
+          R: "var(--avatar-R)",
+          S: "var(--avatar-S)",
+          T: "var(--avatar-T)",
+          U: "var(--avatar-U)",
+          V: "var(--avatar-V)",
+          W: "var(--avatar-W)",
+          X: "var(--avatar-X)",
+          Y: "var(--avatar-Y)",
+          Z: "var(--avatar-Z)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -74,28 +107,28 @@ export default {
         },
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(10px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" }
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "slide-in": {
           "0%": { transform: "translateX(-100%)" },
-          "100%": { transform: "translateX(0)" }
+          "100%": { transform: "translateX(0)" },
         },
-        "glow": {
+        glow: {
           "0%, 100%": { boxShadow: "0 0 20px hsl(var(--primary) / 0.5)" },
-          "50%": { boxShadow: "0 0 40px hsl(var(--primary) / 0.8)" }
+          "50%": { boxShadow: "0 0 40px hsl(var(--primary) / 0.8)" },
         },
-        "blink": {
+        blink: {
           "0%, 49%": { opacity: "1" },
-          "50%, 100%": { opacity: "0" }
-        }
+          "50%, 100%": { opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.5s ease-out",
         "slide-in": "slide-in 0.3s ease-out",
-        "glow": "glow 2s ease-in-out infinite",
-        "blink": "blink 1s step-end infinite",
+        glow: "glow 2s ease-in-out infinite",
+        blink: "blink 1s step-end infinite",
       },
     },
   },
