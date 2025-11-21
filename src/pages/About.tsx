@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function About() {
-  const [title, setTitle] = useState('About IEEE RAS ESPRIM SB');
+  const [title, setTitle] = useState('About ESPRIM ROBOTS');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
 

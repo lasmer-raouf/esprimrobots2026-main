@@ -9,8 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 type NormalizedMessage = {
   id: number;
-  from: string; // sender id or 'admin'
-  to: string; // recipient id or 'admin'
+  from: string; // sender id (UUID) or 'admin' fallback
+  to: string; // recipient id (UUID) or 'admin' role fallback
   content: string;
   timestamp: number; // ms
   read: boolean;
@@ -33,27 +33,19 @@ export function AdminChat() {
   const pollingRef = useRef<number | null>(null);
   const [sending, setSending] = useState(false);
 
+  // store resolved current user (admin) id here
+  const currentUserIdRef = useRef<string | null>(null);
+
   const scrollToBottom = () =>
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
-
-  useEffect(() => {
-    mountedRef.current = true;
-    loadMembers();
-    loadMessages();
-    pollingRef.current = window.setInterval(loadMessages, 2000);
-    return () => {
-      mountedRef.current = false;
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Normalize DB row to our shape (handles modern and legacy)
   const normalize = (row: any): NormalizedMessage => {
     const createdAt = row.created_at ?? row.sent_at ?? null;
     const ts = typeof createdAt === 'number' ? createdAt : createdAt ? new Date(createdAt).getTime() : Date.now();
     const from = row.sender_id ?? row.from ?? row.sender ?? 'unknown';
-    const to = row.recipient_id ?? row.to ?? row.recipient ?? 'admin';
+    // prefer recipient_id, then legacy to/to/recipient, then recipient_role
+    const to = row.recipient_id ?? row.to ?? row.recipient ?? row.recipient_role ?? 'admin';
     return {
       id: Number(row.id ?? Math.floor(Math.random() * -1000000)),
       from: String(from),
@@ -65,6 +57,25 @@ export function AdminChat() {
     };
   };
 
+  // resolve current user id (the admin signed in)
+  const resolveCurrentUser = async (): Promise<string | null> => {
+    if (currentUserIdRef.current) return currentUserIdRef.current;
+    try {
+      // supabase-js v2: auth.getUser()
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('auth.getUser error', error);
+        return null;
+      }
+      const id = data?.user?.id ?? null;
+      currentUserIdRef.current = id;
+      return id;
+    } catch (err) {
+      console.error('resolveCurrentUser failed', err);
+      return null;
+    }
+  };
+
   // Load members
   const loadMembers = async () => {
     try {
@@ -74,7 +85,7 @@ export function AdminChat() {
         toast({ title: 'Error', description: 'Failed to load members.', variant: 'destructive' });
         return;
       }
-      if (mountedRef.current) setMembers(data ?? []);
+      if (mountedRef.current) setMembers((data ?? []) as Member[]);
     } catch (err) {
       console.error('loadMembers unexpected', err);
     }
@@ -116,20 +127,51 @@ export function AdminChat() {
     }
   };
 
-  const getUnreadCount = (memberId: string) =>
-    messages.filter((m) => m.from === memberId && m.to === 'admin' && !m.read).length;
+  useEffect(() => {
+    mountedRef.current = true;
 
-  const getMemberMessages = (memberId: string) =>
-    messages.filter((m) => (m.from === memberId && m.to === 'admin') || (m.from === 'admin' && m.to === memberId));
+    // resolve current user id first (needed for correct display / RLS-safe inserts),
+    // then load members + messages
+    (async () => {
+      await resolveCurrentUser();
+      await loadMembers();
+      await loadMessages();
+    })();
+
+    pollingRef.current = window.setInterval(loadMessages, 2000);
+    return () => {
+      mountedRef.current = false;
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getUnreadCount = (memberId: string) => {
+    const adminId = currentUserIdRef.current ?? 'admin';
+    return messages.filter((m) => m.from === memberId && (m.to === adminId || m.to === 'admin') && !m.read).length;
+  };
+
+  const getMemberMessages = (memberId: string) => {
+    const adminId = currentUserIdRef.current ?? 'admin';
+    return messages.filter(
+      (m) =>
+        // member -> admin (role or admin id)
+        (m.from === memberId && (m.to === adminId || m.to === 'admin')) ||
+        // admin -> member
+        ((m.from === adminId || m.from === 'admin') && m.to === memberId)
+    );
+  };
 
   // Send: try modern insert first, fallback to legacy
   const handleSend = async () => {
     if (!selectedMemberId || !message.trim() || sending) return;
     setSending(true);
     const content = message.trim();
+
+    // optimistic (show immediately)
     const optimistic: NormalizedMessage = {
       id: Date.now(),
-      from: 'admin',
+      from: currentUserIdRef.current ?? 'admin',
       to: selectedMemberId,
       content,
       timestamp: Date.now(),
@@ -140,13 +182,26 @@ export function AdminChat() {
     scrollToBottom();
 
     try {
-      const payloadModern = {
-        sender_id: 'admin', // admin identity string — adjust if you use a UUID for admin
+      const senderId = (await resolveCurrentUser()) ?? null;
+      if (!senderId) {
+        toast({ title: 'Not signed in', description: 'Cannot send message because current user is not known.', variant: 'destructive' });
+        setSending(false);
+        // remove optimistic
+        setMessages((p) => p.filter((m) => m.id !== optimistic.id));
+        return;
+      }
+
+      const payloadModern: any = {
+        // use resolved UUID as sender_id so RLS permits the insert
+        sender_id: senderId,
         recipient_id: selectedMemberId,
+        // optional: keep role field if you want to mark messages targeted to role (not required)
+        recipient_role: null,
         content,
         created_at: new Date().toISOString(),
         read: false,
       };
+
       const { data, error } = await supabase.from('messages').insert([payloadModern]).select();
       if (!error && data && data.length > 0) {
         setMessages((prev) => {
@@ -157,10 +212,10 @@ export function AdminChat() {
         return;
       }
 
-      // If schema error, fallback to legacy
+      // If schema error (missing columns), fallback to legacy shape
       if (error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''))) {
         const payloadLegacy = {
-          from: 'admin',
+          from: senderId, // legacy "from" — keep it as UUID if legacy accepts it
           to: selectedMemberId,
           content,
           sent_at: new Date().toISOString(),
@@ -186,7 +241,7 @@ export function AdminChat() {
       toast({ title: 'Send failed', description: 'Unexpected error.', variant: 'destructive' });
     } finally {
       setSending(false);
-      // Refresh messages
+      // refresh messages to pick up server-canonical rows
       loadMessages();
     }
   };
@@ -194,13 +249,16 @@ export function AdminChat() {
   // Mark all messages from a member as read (tries modern then legacy)
   const markAsRead = async (memberId: string) => {
     try {
-      const { error } = await supabase.from('messages').update({ read: true }).eq('sender_id', memberId).eq('read', false);
+      // admin marks messages from member as read (server policies typically allow admins or the recipient)
+      const adminId = await resolveCurrentUser();
+      if (!adminId) return;
+      const { error } = await supabase.from('messages').update({ read: true }).eq('sender_id', memberId).eq('recipient_id', adminId).eq('read', false);
       if (!error) {
-        setMessages((prev) => prev.map((m) => (m.from === memberId ? { ...m, read: true } : m)));
+        setMessages((prev) => prev.map((m) => (m.from === memberId && (m.to === adminId || m.to === 'admin') ? { ...m, read: true } : m)));
         return;
       }
-      // fallback
-      const { error: err2 } = await supabase.from('messages').update({ read: true }).eq('from', memberId).eq('read', false);
+      // fallback legacy
+      const { error: err2 } = await supabase.from('messages').update({ read: true }).eq('from', memberId).eq('to', adminId).eq('read', false);
       if (!err2) setMessages((prev) => prev.map((m) => (m.from === memberId ? { ...m, read: true } : m)));
     } catch (err) {
       console.error('markAsRead error', err);
@@ -261,7 +319,8 @@ export function AdminChat() {
                     <p className="text-muted-foreground text-center py-8">No messages yet. Start a conversation!</p>
                   ) : (
                     memberMessages.map((msg) => {
-                      const isFromAdmin = msg.from === 'admin';
+                      const adminId = currentUserIdRef.current ?? 'admin';
+                      const isFromAdmin = msg.from === adminId || msg.from === 'admin';
                       return (
                         <div key={msg.id} className={`flex ${isFromAdmin ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[70%] rounded-lg p-3 ${isFromAdmin ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>

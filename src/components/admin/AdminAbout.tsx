@@ -99,7 +99,7 @@ export function AdminAbout() {
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="About IEEE RAS ESPRIM SB"
+              placeholder="About ESPRIM ROBOTS"
             />
           </div>
 
