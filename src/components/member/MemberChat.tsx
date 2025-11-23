@@ -2,13 +2,14 @@
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea"; // <-- use your project's Textarea (keeps styles)
 import { useAuth } from "@/contexts/AuthContext";
 import { Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Badge } from "@/components/ui/badge";
 import UserAvatar from "@/components/ui/user-avatar";
+import { ChatInput, ChatInputHandle } from "@/components/chat/ChatInput";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { ChatUserList, ChatUser } from "@/components/chat/ChatUserList";
 
 type NormalizedMessage = {
   id: number;
@@ -20,187 +21,14 @@ type NormalizedMessage = {
   _raw?: any;
 };
 
-type Admin = {
-  id: string;
-  name: string;
-  email?: string | null;
-  image?: string | null;
-};
 
-/** ChatInput using your project's Textarea so the styling matches the rest of the app.
- *  Keeps local state & selection so parent re-renders don't steal caret/focus.
- */
-type ChatInputHandle = {
-  focus: () => void;
-};
-
-const ChatInput = React.forwardRef<
-  ChatInputHandle,
-  { onSend: (content: string) => Promise<void> | void; disabled?: boolean; onFocus?: () => void; onBlur?: () => void }
->(({ onSend, disabled, onFocus, onBlur }, ref) => {
-  // ref to underlying native textarea element — cast because Textarea should forward ref to <textarea>
-  const ta = useRef<HTMLTextAreaElement | null>(null);
-  const [value, setValue] = useState("");
-  const [sending, setSending] = useState(false);
-  const selectionRef = useRef<{ start: number; end: number } | null>(null);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: () => {
-        ta.current?.focus();
-      },
-    }),
-    []
-  );
-
-  // restore selection if present
-  useLayoutEffect(() => {
-    const t = ta.current;
-    if (!t) return;
-    const s = selectionRef.current;
-    if (s) {
-      try {
-        t.setSelectionRange(s.start, s.end);
-      } catch {
-        // ignore invalid ranges
-      }
-    }
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
-    selectionRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
-  };
-
-  const doSend = async () => {
-    const trimmed = value.trim();
-    if (!trimmed || sending || disabled) return;
-    setSending(true);
-    try {
-      await onSend(trimmed);
-      setValue("");
-    } catch (err) {
-      // keep value if sending failed; parent should show toast
-      console.error("ChatInput send failed", err);
-      throw err;
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="flex gap-3 px-3 pb-3">
-      {/* cast ref to any because Textarea components often forward the ref to the native element.
-          If your Textarea forwards refs properly this will hook into the native textarea.
-          If it doesn't forward refs we'll show a short patch below to enable that. */}
-      <Textarea
-        ref={ta as any}
-        value={value}
-        onChange={handleChange}
-        placeholder="Type your message..."
-        rows={2}
-        className="flex-1"
-        onKeyDown={async (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            await doSend();
-          }
-        }}
-        disabled={disabled}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      />
-      <Button onClick={doSend} disabled={sending || disabled}>
-        <Send className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-});
-ChatInput.displayName = "ChatInput";
-
-/** Memoized Admin row to avoid unnecessary renders when messages update */
-const AdminRow = React.memo(function AdminRow({
-  admin,
-  selected,
-  onSelect,
-  splitName,
-  getLastMessage,
-  getUnreadCount,
-}: {
-  admin: Admin;
-  selected: boolean;
-  onSelect: (id: string) => void;
-  splitName: (fullName?: string | null) => { first: string; last: string };
-  getLastMessage: (adminId: string) => NormalizedMessage | null;
-  getUnreadCount: (adminId: string) => number;
-}) {
-  const { first, last } = splitName(admin.name);
-  const lastMsg = getLastMessage(admin.id);
-  const unread = getUnreadCount(admin.id);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (selected) ref.current?.focus();
-  }, [selected]);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      ref={ref}
-      data-id={admin.id}
-      aria-pressed={selected}
-      title={admin.email ?? admin.name}
-      onClick={() => onSelect(admin.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(admin.id);
-        }
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          const nodes = Array.from(document.querySelectorAll<HTMLElement>('[role="button"]') ?? []);
-          const idx = nodes.findIndex((n) => n.dataset.id === admin.id);
-          const next = e.key === "ArrowDown" ? nodes[idx + 1] : nodes[idx - 1];
-          next?.focus();
-        }
-      }}
-      className={`w-full flex items-start gap-5 px-5 py-4 rounded-lg transition-all outline-none ${
-        selected ? "bg-primary/8 ring-1 ring-primary/20" : "hover:bg-muted/30"
-      }`}
-    >
-      <UserAvatar firstName={first || "U"} lastName={last || ""} src={admin.image ?? undefined} sizeClass="w-16 h-16" />
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-start">
-          <div className="truncate">
-            <div className={`font-medium ${selected ? "text-primary" : ""}`}>{admin.name}</div>
-            <div className="text-sm text-muted-foreground truncate">{admin.email ?? ""}</div>
-          </div>
-          <div className="ml-3 text-right">
-            <div className="text-sm text-muted-foreground">{lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString() : ""}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-3">
-          <p className="text-sm text-muted-foreground truncate">{lastMsg ? lastMsg.content.slice(0, 140) : "No messages yet"}</p>
-          {unread > 0 && (
-            <Badge variant="destructive" className="ml-4">
-              {unread}
-            </Badge>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
 
 export function MemberChat(): JSX.Element | null {
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<NormalizedMessage[]>([]);
   const [sending, setSending] = useState(false);
-  const [admins, setAdmins] = useState<Admin[]>([]);
+  const [admins, setAdmins] = useState<ChatUser[]>([]);
   const [selectedAdminId, setSelectedAdminId] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
@@ -252,7 +80,7 @@ export function MemberChat(): JSX.Element | null {
       }
       const userIds = (urData || []).map((r: any) => String(r.user_id)).filter(Boolean) ?? [];
 
-      let adminsList: Admin[] = [];
+      let adminsList: ChatUser[] = [];
 
       if (userIds.length > 0) {
         const { data: pData, error: pErr } = await supabase
@@ -537,7 +365,7 @@ export function MemberChat(): JSX.Element | null {
   };
 
   const selectedAdmin = admins.find((a) => a.id === selectedAdminId);
-  const adminMessages = selectedAdminId ? getAdminMessages(selectedAdminId) : [];
+  const filteredMessages = selectedAdminId ? getAdminMessages(selectedAdminId) : [];
 
   return (
     <div className="space-y-8">
@@ -549,29 +377,18 @@ export function MemberChat(): JSX.Element | null {
       </div>
 
       <div className="grid md:grid-cols-12 gap-6">
-        <Card className="md:col-span-5">
-          <CardHeader>
-            <CardTitle>Admins</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4" ref={selectionListRef}>
-            {admins.map((admin) => (
-              <AdminRow
-                key={admin.id}
-                admin={admin}
-                selected={selectedAdminId === admin.id}
-                onSelect={handleSelectAdmin}
-                splitName={splitName}
-                getLastMessage={getLastMessage}
-                getUnreadCount={getUnreadCount}
-              />
-            ))}
-            {admins.length === 0 && <p className="text-sm text-muted-foreground">No admins found</p>}
-          </CardContent>
-        </Card>
-
+        <div className="md:col-span-5">
+          <ChatUserList
+            title="Admins"
+            users={admins}
+            selectedUserId={selectedAdminId}
+            onSelectUser={handleSelectAdmin}
+            getLastMessage={getLastMessage}
+            getUnreadCount={getUnreadCount}
+          />
+        </div>
         {/* MAIN CHAT CARD */}
-        {/* Removed fixed height and ensured flex layout so overflow works correctly */}
-        <Card className="md:col-span-7 flex flex-col">
+        <Card className="md:col-span-7 h-[600px] flex flex-col">
           <CardHeader className="flex items-center justify-between">
             <CardTitle>{selectedAdmin ? `Chat with ${selectedAdmin.name}` : "Select an admin"}</CardTitle>
 
@@ -583,28 +400,30 @@ export function MemberChat(): JSX.Element | null {
               <>
                 {/* messages container: flex-1 so it consumes available space and scrolls internally */}
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-6 px-3 py-4" aria-live="polite">
-                  {adminMessages.length === 0 ? (
+                  {filteredMessages.length === 0 ? (
                     <p className="text-muted-foreground text-center py-8">No messages yet. Start a conversation!</p>
                   ) : (
-                    adminMessages.map((msg) => {
-                      const isFromMe = msg.from === currentUserId;
-                      const otherAdmin = !isFromMe ? admins.find((a) => a.id === msg.from) : null;
-                      const { first, last } = splitName(otherAdmin?.name ?? "");
+                    filteredMessages.map((msg) => {
+                      const isMe = msg.from === currentUserId;
+                      const otherUser = !isMe ? admins.find((a) => a.id === msg.from) : null;
+                      const { first, last } = splitName(otherUser?.name);
+
                       return (
-                        <div key={msg.id} className={`flex ${isFromMe ? "justify-end" : "justify-start"} items-end`}>
-                          {!isFromMe && (
-                            <div className="mr-4">
-                              <UserAvatar firstName={first || "U"} lastName={last || ""} src={otherAdmin?.image ?? undefined} sizeClass="w-8 h-8" />
-                            </div>
-                          )}
-
-                          <div className={`max-w-[88%] rounded-lg p-4 ${isFromMe ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                            <p className="text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
-                            <p className="text-xs opacity-70 mt-2">{new Date(msg.timestamp).toLocaleString()}</p>
-                          </div>
-
-                          {isFromMe && <div className="ml-4" />}
-                        </div>
+                        <MessageBubble
+                          key={`${msg.id}-${msg.timestamp}`}
+                          message={msg}
+                          isOwnMessage={isMe}
+                          avatar={
+                            !isMe ? (
+                              <UserAvatar
+                                firstName={first || 'U'}
+                                lastName={last || ''}
+                                src={otherUser?.image ?? undefined}
+                                sizeClass="w-8 h-8"
+                              />
+                            ) : undefined
+                          }
+                        />
                       );
                     })
                   )}

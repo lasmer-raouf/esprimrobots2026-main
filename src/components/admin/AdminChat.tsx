@@ -2,12 +2,15 @@
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { InputGroup, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import UserAvatar from '@/components/ui/user-avatar';
+import { ChatInput, ChatInputHandle } from '@/components/chat/ChatInput';
+import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ChatUserList, ChatUser } from '@/components/chat/ChatUserList';
 
 type NormalizedMessage = {
   id: number;
@@ -19,178 +22,11 @@ type NormalizedMessage = {
   _raw?: any;
 };
 
-type Member = {
-  id: string;
-  name: string;
-  image?: string | null;
-};
 
-/**
- * ChatInput: isolated input component that manages its own value & caret.
- * Exposes `focus()` via ref so parent can focus when selecting a conversation.
- */
-type ChatInputHandle = {
-  focus: () => void;
-};
-
-const ChatInput = React.forwardRef<ChatInputHandle, { onSend: (content: string) => Promise<void> | void; disabled?: boolean }>(
-  ({ onSend, disabled }, ref) => {
-    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-    const [value, setValue] = useState('');
-    const [sending, setSending] = useState(false);
-
-    // preserve selection across re-renders (shouldn't be necessary since it's local, but safe)
-    const selectionRef = useRef<{ start: number; end: number } | null>(null);
-    useLayoutEffect(() => {
-      const t = textareaRef.current;
-      if (!t) return;
-      const s = selectionRef.current;
-      if (s) {
-        try {
-          t.setSelectionRange(s.start, s.end);
-        } catch {
-          // ignore
-        }
-      }
-    }, [value]);
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        focus: () => {
-          textareaRef.current?.focus();
-        },
-      }),
-      []
-    );
-
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setValue(e.target.value);
-      selectionRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
-    };
-
-    const doSend = async () => {
-      const trimmed = value.trim();
-      if (!trimmed || sending || disabled) return;
-      setSending(true);
-      try {
-        await onSend(trimmed);
-        // clear only if send succeeded (parent may throw / reject if something goes wrong)
-        setValue('');
-      } catch (err) {
-        // parent handled toasts; keep current value so user doesn't lose typed text
-        console.error('ChatInput: send failed', err);
-      } finally {
-        setSending(false);
-      }
-    };
-
-    return (
-      <div className="flex gap-3 px-3 py-3">
-        <Textarea
-          ref={textareaRef as any}
-          value={value}
-          onChange={handleChange}
-          placeholder="Type your message..."
-          rows={2}
-          className="flex-1"
-          onKeyDown={async (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              await doSend();
-            }
-          }}
-          disabled={disabled}
-        />
-        <Button onClick={doSend} disabled={sending || disabled}>
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  }
-);
-
-ChatInput.displayName = 'ChatInput';
-
-/**
- * MemberRow - memoized to avoid unnecessary re-renders from parent message updates
- */
-const MemberRow = React.memo(function MemberRow({
-  member,
-  selected,
-  onSelect,
-  splitName,
-  getLastMessage,
-  getUnreadCount,
-}: {
-  member: Member;
-  selected: boolean;
-  onSelect: (id: string) => void;
-  splitName: (fullName?: string | null) => { first: string; last: string };
-  getLastMessage: (memberId: string) => NormalizedMessage | null;
-  getUnreadCount: (memberId: string) => number;
-}) {
-  const { first, last } = splitName(member.name);
-  const unread = getUnreadCount(member.id);
-  const lastMsg = getLastMessage(member.id);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (selected) ref.current?.focus();
-  }, [selected]);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      ref={ref}
-      data-id={member.id}
-      aria-pressed={selected}
-      title={member.name}
-      onClick={() => onSelect(member.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(member.id);
-        }
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          const nodes = Array.from(document.querySelectorAll<HTMLElement>('[role="button"]') ?? []);
-          const idx = nodes.findIndex((n) => n.dataset.id === member.id);
-          const next = e.key === 'ArrowDown' ? nodes[idx + 1] : nodes[idx - 1];
-          next?.focus();
-        }
-      }}
-      className={`w-full flex items-start gap-5 px-5 py-4 rounded-lg transition-all outline-none
-        ${selected ? 'bg-primary/8 ring-1 ring-primary/20' : 'hover:bg-muted/30'}`}
-    >
-      <UserAvatar firstName={first || 'U'} lastName={last || ''} src={member.image ?? undefined} sizeClass="w-16 h-16" />
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-start">
-          <div className="truncate">
-            <div className={`font-medium ${selected ? 'text-primary' : ''}`}>{member.name}</div>
-          </div>
-          <div className="ml-3 text-right">
-            <div className="text-sm text-muted-foreground">{lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString() : ''}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-3">
-          <p className="text-sm text-muted-foreground truncate">{lastMsg ? lastMsg.content.slice(0, 140) : 'No messages yet'}</p>
-          {unread > 0 && (
-            <Badge variant="destructive" className="ml-4">
-              {unread}
-            </Badge>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-});
 
 export function AdminChat() {
   const { toast } = useToast();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<ChatUser[]>([]);
   const [messages, setMessages] = useState<NormalizedMessage[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -228,6 +64,7 @@ export function AdminChat() {
     };
   };
 
+
   const splitName = (fullName?: string | null) => {
     if (!fullName) return { first: 'U', last: '' };
     const parts = fullName.trim().split(/\s+/);
@@ -263,7 +100,7 @@ export function AdminChat() {
         toast({ title: 'Error', description: 'Failed to load members.', variant: 'destructive' });
         return;
       }
-      if (mountedRef.current) setMembers((data ?? []) as Member[]);
+      if (mountedRef.current) setMembers((data ?? []) as ChatUser[]);
     } catch (err) {
       console.error('loadMembers unexpected', err);
     }
@@ -347,32 +184,8 @@ export function AdminChat() {
   }, [messages, selectedMemberId]);
 
   // ensure document-level focusin/focusout updates inputFocusedRef and applies pending messages on blur
-  useEffect(() => {
-    const onFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('textarea') || target.closest('input')) {
-        inputFocusedRef.current = true;
-      }
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('textarea') || target.closest('input')) {
-        inputFocusedRef.current = false;
-        if (pendingMessagesRef.current) {
-          setMessages(pendingMessagesRef.current);
-          pendingMessagesRef.current = null;
-        }
-      }
-    };
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
-  }, []);
+  // REMOVED global listeners in favor of direct props on ChatInput
+  // useEffect(() => { ... }, []);
 
   const getUnreadCount = (memberId: string) => {
     const adminId = currentUserIdRef.current ?? 'admin';
@@ -556,30 +369,21 @@ export function AdminChat() {
       </div>
 
       <div className="grid md:grid-cols-12 gap-6">
-        <Card className="md:col-span-5">
-          <CardHeader>
-            <CardTitle>Members</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4" ref={selectionListRef}>
-            {members.map((member) => (
-              <MemberRow
-                key={member.id}
-                member={member}
-                selected={selectedMemberId === member.id}
-                onSelect={handleSelectMember}
-                splitName={splitName}
-                getLastMessage={getLastMessage}
-                getUnreadCount={getUnreadCount}
-              />
-            ))}
-            {members.length === 0 && <p className="text-sm text-muted-foreground">No members found</p>}
-          </CardContent>
-        </Card>
-
+        <div className="md:col-span-5">
+          <ChatUserList
+            title="Members"
+            users={members}
+            selectedUserId={selectedMemberId}
+            onSelectUser={setSelectedMemberId}
+            getLastMessage={getLastMessage}
+            getUnreadCount={getUnreadCount}
+          />
+        </div>
         {/* MAIN CHAT CARD */}
         {/* Note: removed fixed height (h-[760px]) so card is flexible.
             CardContent uses flex-1 flex-col min-h-0 so overflow-y children can work. */}
-        <Card className="md:col-span-7 flex flex-col">
+        {/* MAIN CHAT CARD */}
+        <Card className="md:col-span-7 h-[600px] flex flex-col">
           <CardHeader>
             <CardTitle>{selectedMember ? `Chat with ${selectedMember.name}` : 'Select a member'}</CardTitle>
           </CardHeader>
@@ -603,20 +407,21 @@ export function AdminChat() {
                       const otherMember = !isFromAdmin ? members.find((m) => m.id === msg.from) : null;
                       const { first, last } = splitName(otherMember?.name ?? '');
                       return (
-                        <div key={msg.id} className={`flex ${isFromAdmin ? 'justify-end' : 'justify-start'} items-end`}>
-                          {!isFromAdmin && (
-                            <div className="mr-4">
-                              <UserAvatar firstName={first || 'U'} lastName={last || ''} src={otherMember?.image ?? undefined} sizeClass="w-8 h-8" />
-                            </div>
-                          )}
-
-                          <div className={`max-w-[88%] rounded-lg p-4 ${isFromAdmin ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                            <p className="text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
-                            <p className="text-xs opacity-70 mt-2">{new Date(msg.timestamp).toLocaleString()}</p>
-                          </div>
-
-                          {isFromAdmin && <div className="ml-4" />}
-                        </div>
+                        <MessageBubble
+                          key={`${msg.id}-${msg.timestamp}`}
+                          message={msg}
+                          isOwnMessage={isFromAdmin}
+                          avatar={
+                            !isFromAdmin ? (
+                              <UserAvatar
+                                firstName={first || 'U'}
+                                lastName={last || ''}
+                                src={otherMember?.image ?? undefined}
+                                sizeClass="w-8 h-8"
+                              />
+                            ) : undefined
+                          }
+                        />
                       );
                     })
                   )}
@@ -624,7 +429,7 @@ export function AdminChat() {
 
                 {/* input wrapper sits after messages container; mt-auto ensures it stays at the bottom */}
                 <div className="mt-auto border-t border-muted/10">
-                  <ChatInput ref={chatInputRef} onSend={chatOnSend} disabled={!selectedMemberId} />
+                  <ChatInput ref={chatInputRef} onSend={chatOnSend} disabled={!selectedMemberId} onFocus={handleInputFocus} onBlur={handleInputBlur} />
                 </div>
               </>
             ) : (

@@ -126,88 +126,6 @@ export function AdminNews() {
     }
   };
 
-  // Local-form component: each instance keeps its own state so typing is stable
-  const NewsForm = ({
-    formKey,
-    initial = { title: '', content: '', image_url: '', published: true },
-    onCancel,
-    onSubmit,
-    submitLabel,
-  }: {
-    formKey: string;
-    initial?: { title: string; content: string; image_url: string; published: boolean };
-    onCancel: () => void;
-    onSubmit: (payload: { title: string; content: string; image_url: string; published: boolean }) => void;
-    submitLabel?: string;
-  }) => {
-    const [title, setTitle] = useState(initial.title);
-    const [content, setContent] = useState(initial.content);
-    const [image_url, setImageUrl] = useState(initial.image_url);
-    const [published, setPublished] = useState<boolean>(initial.published);
-
-    // reset local state if initial changes (e.g., opening edit for a different item)
-    useEffect(() => {
-      setTitle(initial.title);
-      setContent(initial.content);
-      setImageUrl(initial.image_url);
-      setPublished(initial.published);
-    }, [initial.title, initial.content, initial.image_url, initial.published, formKey]);
-
-    return (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit({ title, content, image_url: image_url || '', published });
-        }}
-        className="space-y-4"
-      >
-        <div className="grid gap-2">
-          <Label htmlFor={`title-${formKey}`}>Title</Label>
-          <Input
-            id={`title-${formKey}`}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor={`content-${formKey}`}>Content</Label>
-          <Textarea
-            id={`content-${formKey}`}
-            value={content}
-            rows={6}
-            onChange={(e) => setContent(e.target.value)}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor={`image_url-${formKey}`}>Image URL</Label>
-          <Input
-            id={`image_url-${formKey}`}
-            type="url"
-            value={image_url}
-            onChange={(e) => setImageUrl(e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch checked={published} onCheckedChange={(v: boolean) => setPublished(v)} />
-          <Label>Published</Label>
-        </div>
-
-        <div className="flex gap-2">
-          <Button type="submit" className="flex-1">
-            {submitLabel ?? 'Save'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -256,10 +174,22 @@ export function AdminNews() {
       ) : (
         <div className="space-y-4">
           {news.map((item) => (
-            <div key={item.id} className="flex items-start gap-4 p-4 border rounded-lg">
-              {item.image_url && <img src={item.image_url} alt={item.title} className="w-24 h-24 object-cover rounded" />}
+            <div key={item.id} className="flex flex-col md:flex-row items-start gap-4 p-4 border rounded-lg">
+              {item.image_url && (
+                <div className="w-full md:w-48 h-48 flex-shrink-0 bg-muted rounded-md overflow-hidden">
+                  <img
+                    src={item.image_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://placehold.co/600x400?text=No+Image';
+                      e.currentTarget.onerror = null; // prevent loop
+                    }}
+                  />
+                </div>
+              )}
 
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 w-full">
                 <div className="flex justify-between mb-2">
                   <h3 className="font-semibold text-lg">{item.title}</h3>
                   <div className="flex gap-1 text-sm text-muted-foreground items-center">
@@ -268,12 +198,11 @@ export function AdminNews() {
                   </div>
                 </div>
 
-                <p className="text-sm text-muted-foreground line-clamp-2">{item.content}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.content}</p>
 
                 <span
-                  className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
-                    item.published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                  }`}
+                  className={`text-xs px-2 py-1 rounded mt-2 inline-block ${item.published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                    }`}
                 >
                   {item.published ? 'Published' : 'Draft'}
                 </span>
@@ -300,7 +229,7 @@ export function AdminNews() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-row md:flex-col gap-2 mt-2 md:mt-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -328,3 +257,164 @@ export function AdminNews() {
     </div>
   );
 }
+
+// Local-form component: each instance keeps its own state so typing is stable
+const NewsForm = ({
+  formKey,
+  initial = { title: '', content: '', image_url: '', published: true },
+  onCancel,
+  onSubmit,
+  submitLabel,
+}: {
+  formKey: string;
+  initial?: { title: string; content: string; image_url: string; published: boolean };
+  onCancel: () => void;
+  onSubmit: (payload: { title: string; content: string; image_url: string; published: boolean }) => void;
+  submitLabel?: string;
+}) => {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(initial.title);
+  const [content, setContent] = useState(initial.content);
+  const [image_url, setImageUrl] = useState(initial.image_url);
+  const [published, setPublished] = useState<boolean>(initial.published);
+  const [uploading, setUploading] = useState(false);
+
+  // reset local state if initial changes (e.g., opening edit for a different item)
+  useEffect(() => {
+    setTitle(initial.title);
+    setContent(initial.content);
+    setImageUrl(initial.image_url);
+    setPublished(initial.published);
+  }, [initial.title, initial.content, initial.image_url, initial.published, formKey]);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('You must select an image to upload.');
+      }
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('news')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage.from('news').getPublicUrl(filePath);
+
+      if (data) {
+        setImageUrl(data.publicUrl);
+        toast({
+          title: "Success",
+          description: "Image uploaded successfully",
+        });
+      }
+
+    } catch (error: any) {
+      toast({
+        title: 'Error uploading image',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({ title, content, image_url: image_url || '', published });
+      }}
+      className="space-y-4"
+    >
+      <div className="grid gap-2">
+        <Label htmlFor={`title-${formKey}`}>Title</Label>
+        <Input
+          id={`title-${formKey}`}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor={`content-${formKey}`}>Content</Label>
+        <Textarea
+          id={`content-${formKey}`}
+          value={content}
+          rows={6}
+          onChange={(e) => setContent(e.target.value)}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor={`image_upload-${formKey}`}>Image</Label>
+        <div className="flex flex-col gap-4">
+          {image_url && (
+            <div className="relative w-full max-w-sm aspect-video rounded-lg overflow-hidden border bg-muted">
+              <img
+                src={image_url}
+                alt="Preview"
+                className="w-full h-full object-cover"
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="absolute top-2 right-2 h-6 w-6"
+                onClick={() => setImageUrl('')}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          <div className="flex gap-2 items-center">
+            <Input
+              id={`image_upload-${formKey}`}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              disabled={uploading}
+              className="cursor-pointer"
+            />
+            {uploading && <span className="text-sm text-muted-foreground animate-pulse">Uploading...</span>}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Or provide a URL directly:
+          </div>
+          <Input
+            id={`image_url-${formKey}`}
+            type="url"
+            value={image_url}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            disabled={uploading}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Switch checked={published} onCheckedChange={(v: boolean) => setPublished(v)} />
+        <Label>Published</Label>
+      </div>
+
+      <div className="flex gap-2">
+        <Button type="submit" className="flex-1" disabled={uploading}>
+          {uploading ? 'Uploading...' : (submitLabel ?? 'Save')}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={uploading}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+};
